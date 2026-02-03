@@ -15,11 +15,23 @@ on:
 jobs:
   claude:
     if: |
-      (github.event_name == 'issue_comment' && contains(github.event.comment.body, '@claude')) ||
-      (github.event_name == 'pull_request_review_comment' && contains(github.event.comment.body, '@claude')) ||
-      (github.event_name == 'pull_request_review' && contains(github.event.review.body, '@claude')) ||
-      (github.event_name == 'issues' && (contains(github.event.issue.body, '@claude') || contains(github.event.issue.title, '@claude') || (github.event.action == 'labeled' && github.event.label.name == 'claude'))) ||
-      (github.event_name == 'pull_request' && github.event.action == 'labeled' && github.event.label.name == 'claude')
+      (
+        (github.event_name == 'issue_comment' && 
+         contains(github.event.comment.body, '@claude') &&
+         contains(fromJson('["OWNER", "MEMBER", "COLLABORATOR"]'), github.event.comment.author_association)) ||
+        (github.event_name == 'pull_request_review_comment' && 
+         contains(github.event.comment.body, '@claude') &&
+         contains(fromJson('["OWNER", "MEMBER", "COLLABORATOR"]'), github.event.comment.author_association)) ||
+        (github.event_name == 'pull_request_review' && 
+         contains(github.event.review.body, '@claude') &&
+         contains(fromJson('["OWNER", "MEMBER", "COLLABORATOR"]'), github.event.review.author_association)) ||
+        (github.event_name == 'issues' && 
+         github.event.action == 'labeled' && 
+         github.event.label.name == 'claude') ||
+        (github.event_name == 'pull_request' && 
+         github.event.action == 'labeled' && 
+         github.event.label.name == 'claude')
+      )
       
     runs-on: ubuntu-latest
     permissions:
@@ -44,12 +56,25 @@ jobs:
           additional_permissions: |
             actions: read
 
-          claude_args: '--allowed-tools Code Editor(*) Git(*) Bash(gh pr:*)'
+          prompt: |
+            WHEN WORKING ON ISSUES:
+            - Implement the requested changes
+            - Commit changes to a new branch
+            - Create a pull request using the GitHub CLI
+            - Include a summary and "Closes #<issue-number>" in the PR body
 
-          # Optional: Give a custom prompt to Claude. If this is not specified, Claude will perform the instructions specified in the comment that tagged it.
-          # prompt: 'Update the pull request description to include a summary of changes.'
+            WHEN WORKING ON PR FEEDBACK:
+            - Apply requested changes
+            - Commit directly to the existing PR
+            - Do NOT create a new PR
 
-          # Optional: Add claude_args to customize behavior and configuration
-          # See https://github.com/anthropics/claude-code-action/blob/main/docs/usage.md
-          # or https://code.claude.com/docs/en/cli-reference for available options
+            ALWAYS:
+            - Use clean, professional commit messages
+
+          track_progress: true
+
+          claude_args: |
+            --model "claude-opus-4-5"
+            --max-turns 100
+            --allowed-tools "Edit,Write,Read,Glob,Grep,LS,Git(*),Bash(git:*),Bash(gh pr:*),Bash(gh repo:*),Bash(gh issue:*)"
           
