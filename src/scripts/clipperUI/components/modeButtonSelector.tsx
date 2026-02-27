@@ -16,7 +16,7 @@ class ModeButtonSelectorClass extends ComponentBase<{}, ClipperStateProp> {
 		});
 	};
 
-	private getPdfButtonProps(currentMode: ClipMode): PropsForModeElementNoAriaGrouping {
+	private getPdfButtonProps(currentMode: ClipMode, tabIndex: number): PropsForModeElementNoAriaGrouping {
 		if (this.props.clipperState.pageInfo.contentType !== OneNoteApi.ContentType.EnhancedUrl) {
 			return undefined;
 		}
@@ -27,11 +27,12 @@ class ModeButtonSelectorClass extends ComponentBase<{}, ClipperStateProp> {
 			myMode: ClipMode.Pdf,
 			selected: currentMode === ClipMode.Pdf,
 			onModeSelected: this.onModeSelected.bind(this),
-			tooltipText: Localization.getLocalizedString("WebClipper.ClipType.Pdf.Button.Tooltip")
+			tooltipText: Localization.getLocalizedString("WebClipper.ClipType.Pdf.Button.Tooltip"),
+			tabIndex: tabIndex
 		};
 	}
 
-	private getAugmentationButtonProps(currentMode: ClipMode): PropsForModeElementNoAriaGrouping {
+	private getAugmentationButtonProps(currentMode: ClipMode, tabIndex: number): PropsForModeElementNoAriaGrouping {
 		if (this.props.clipperState.pageInfo.contentType === OneNoteApi.ContentType.EnhancedUrl) {
 			return undefined;
 		}
@@ -46,11 +47,12 @@ class ModeButtonSelectorClass extends ComponentBase<{}, ClipperStateProp> {
 			myMode: ClipMode.Augmentation,
 			selected: buttonSelected,
 			onModeSelected: this.onModeSelected.bind(this),
-			tooltipText: augmentationTooltip
+			tooltipText: augmentationTooltip,
+			tabIndex: tabIndex
 		};
 	}
 
-	private getFullPageButtonProps(currentMode: ClipMode): PropsForModeElementNoAriaGrouping {
+	private getFullPageButtonProps(currentMode: ClipMode, tabIndex: number): PropsForModeElementNoAriaGrouping {
 		if (this.props.clipperState.pageInfo.contentType === OneNoteApi.ContentType.EnhancedUrl) {
 			return undefined;
 		}
@@ -61,11 +63,12 @@ class ModeButtonSelectorClass extends ComponentBase<{}, ClipperStateProp> {
 			myMode: ClipMode.FullPage,
 			selected: currentMode === ClipMode.FullPage,
 			onModeSelected: this.onModeSelected.bind(this),
-			tooltipText: Localization.getLocalizedString("WebClipper.ClipType.ScreenShot.Button.Tooltip")
+			tooltipText: Localization.getLocalizedString("WebClipper.ClipType.ScreenShot.Button.Tooltip"),
+			tabIndex: tabIndex
 		};
 	}
 
-	private getRegionButtonProps(currentMode: ClipMode): PropsForModeElementNoAriaGrouping {
+	private getRegionButtonProps(currentMode: ClipMode, tabIndex: number): PropsForModeElementNoAriaGrouping {
 		let enableRegionClipping = this.props.clipperState.injectOptions && this.props.clipperState.injectOptions.enableRegionClipping;
 		let contextImageModeUsed = this.props.clipperState.invokeOptions && this.props.clipperState.invokeOptions.invokeMode === InvokeMode.ContextImage;
 
@@ -79,7 +82,8 @@ class ModeButtonSelectorClass extends ComponentBase<{}, ClipperStateProp> {
 			myMode: ClipMode.Region,
 			selected: currentMode === ClipMode.Region,
 			onModeSelected: this.onModeSelected.bind(this),
-			tooltipText: Localization.getLocalizedString("WebClipper.ClipType.MultipleRegions.Button.Tooltip")
+			tooltipText: Localization.getLocalizedString("WebClipper.ClipType.MultipleRegions.Button.Tooltip"),
+			tabIndex: tabIndex
 		};
 	}
 
@@ -87,7 +91,7 @@ class ModeButtonSelectorClass extends ComponentBase<{}, ClipperStateProp> {
 		return "WebClipper.ClipType.Region.Button";
 	}
 
-	private getSelectionButtonProps(currentMode: ClipMode): PropsForModeElementNoAriaGrouping {
+	private getSelectionButtonProps(currentMode: ClipMode, tabIndex: number): PropsForModeElementNoAriaGrouping {
 		if (this.props.clipperState.invokeOptions.invokeMode !== InvokeMode.ContextTextSelection) {
 			return undefined;
 		}
@@ -98,11 +102,12 @@ class ModeButtonSelectorClass extends ComponentBase<{}, ClipperStateProp> {
 			myMode: ClipMode.Selection,
 			selected: currentMode === ClipMode.Selection,
 			onModeSelected: this.onModeSelected.bind(this),
-			tooltipText: Localization.getLocalizedString("WebClipper.ClipType.Selection.Button.Tooltip")
+			tooltipText: Localization.getLocalizedString("WebClipper.ClipType.Selection.Button.Tooltip"),
+			tabIndex: tabIndex
 		};
 	}
 
-	private getBookmarkButtonProps(currentMode: ClipMode): PropsForModeElementNoAriaGrouping {
+	private getBookmarkButtonProps(currentMode: ClipMode, tabIndex: number): PropsForModeElementNoAriaGrouping {
 		if (this.props.clipperState.pageInfo.rawUrl.indexOf("file:///") === 0) {
 			return undefined;
 		}
@@ -113,20 +118,24 @@ class ModeButtonSelectorClass extends ComponentBase<{}, ClipperStateProp> {
 			myMode: ClipMode.Bookmark,
 			selected: currentMode === ClipMode.Bookmark,
 			onModeSelected: this.onModeSelected.bind(this),
-			tooltipText: Localization.getLocalizedString("WebClipper.ClipType.Bookmark.Button.Tooltip")
+			tooltipText: Localization.getLocalizedString("WebClipper.ClipType.Bookmark.Button.Tooltip"),
+			tabIndex: tabIndex
 		};
 	}
 
 	private getListOfButtons(): HTMLElement[] {
 		let currentMode = this.props.clipperState.currentMode.get();
 
+		// Base tabIndex for mode buttons - they should come before PDF options (60+) and location dropdown (70)
+		let baseTabIndex = 40;
+
 		let buttonProps = [
-			this.getFullPageButtonProps(currentMode),
-			this.getRegionButtonProps(currentMode),
-			this.getAugmentationButtonProps(currentMode),
-			this.getSelectionButtonProps(currentMode),
-			this.getBookmarkButtonProps(currentMode),
-			this.getPdfButtonProps(currentMode),
+			this.getFullPageButtonProps(currentMode, baseTabIndex),
+			this.getRegionButtonProps(currentMode, baseTabIndex + 1),
+			this.getAugmentationButtonProps(currentMode, baseTabIndex + 2),
+			this.getSelectionButtonProps(currentMode, baseTabIndex + 3),
+			this.getBookmarkButtonProps(currentMode, baseTabIndex + 4),
+			this.getPdfButtonProps(currentMode, baseTabIndex + 5),
 		];
 
 		let visibleButtons = [];
