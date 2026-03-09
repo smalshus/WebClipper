@@ -82,6 +82,10 @@ export class MainControllerClass extends ComponentBase<MainControllerState, Main
 			if (event.keyCode === Constants.KeyCodes.esc) {
 				this.handleEscPress();
 			}
+			// Handle focus trap for success panel (A11y fix)
+			if (event.keyCode === Constants.KeyCodes.tab) {
+				this.handleFocusTrap(event);
+			}
 		};
 	}
 
@@ -94,6 +98,65 @@ export class MainControllerClass extends ComponentBase<MainControllerState, Main
 	handleEscPress() {
 		if (this.isCloseable()) {
 			this.closeClipper(CloseReason.EscPress);
+		}
+	}
+
+	/**
+	 * Handles focus trapping within the success panel to prevent keyboard focus from escaping
+	 * when navigating with Tab key. This ensures accessibility compliance by keeping focus
+	 * within the popup until the user explicitly closes it.
+	 */
+	handleFocusTrap(event: KeyboardEvent) {
+		// Only trap focus when the success panel is displayed
+		if (this.state.currentPanel !== PanelType.ClippingSuccess) {
+			return;
+		}
+
+		let mainController = document.getElementById(Constants.Ids.mainController);
+		if (!mainController) {
+			return;
+		}
+
+		// Get all focusable elements within the main controller
+		let focusableElements = mainController.querySelectorAll(
+			"a[tabindex], button[tabindex], input[tabindex], [tabindex]:not([tabindex='-1'])"
+		);
+
+		if (focusableElements.length === 0) {
+			return;
+		}
+
+		// Filter to only include elements with positive tabIndex and sort by tabIndex
+		let sortedFocusables: HTMLElement[] = [];
+		for (let i = 0; i < focusableElements.length; i++) {
+			let element = focusableElements[i] as HTMLElement;
+			if (element.tabIndex >= 0) {
+				sortedFocusables.push(element);
+			}
+		}
+
+		if (sortedFocusables.length === 0) {
+			return;
+		}
+
+		// Sort by tabIndex
+		sortedFocusables.sort((a, b) => a.tabIndex - b.tabIndex);
+
+		let firstFocusable = sortedFocusables[0];
+		let lastFocusable = sortedFocusables[sortedFocusables.length - 1];
+
+		if (event.shiftKey) {
+			// Shift + Tab: if on first element, wrap to last
+			if (document.activeElement === firstFocusable) {
+				event.preventDefault();
+				lastFocusable.focus();
+			}
+		} else {
+			// Tab: if on last element, wrap to first
+			if (document.activeElement === lastFocusable) {
+				event.preventDefault();
+				firstFocusable.focus();
+			}
 		}
 	}
 
