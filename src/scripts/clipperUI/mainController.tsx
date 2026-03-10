@@ -102,13 +102,14 @@ export class MainControllerClass extends ComponentBase<MainControllerState, Main
 	}
 
 	/**
-	 * Handles focus trapping within the success panel to prevent keyboard focus from escaping
+	 * Handles focus trapping within certain panels to prevent keyboard focus from escaping
 	 * when navigating with Tab key. This ensures accessibility compliance by keeping focus
 	 * within the popup until the user explicitly closes it.
 	 */
 	handleFocusTrap(event: KeyboardEvent) {
-		// Only trap focus when the success panel is displayed
-		if (this.state.currentPanel !== PanelType.ClippingSuccess) {
+		// Only trap focus for specific panels that need it
+		if (this.state.currentPanel !== PanelType.ClippingSuccess &&
+			this.state.currentPanel !== PanelType.RegionInstructions) {
 			return;
 		}
 
@@ -142,22 +143,28 @@ export class MainControllerClass extends ComponentBase<MainControllerState, Main
 		// Sort by tabIndex
 		sortedFocusables.sort((a, b) => a.tabIndex - b.tabIndex);
 
-		let firstFocusable = sortedFocusables[0];
-		let lastFocusable = sortedFocusables[sortedFocusables.length - 1];
+		// Always handle Tab manually to prevent focus from escaping the iframe
+		event.preventDefault();
 
-		if (event.shiftKey) {
-			// Shift + Tab: if on first element, wrap to last
-			if (document.activeElement === firstFocusable) {
-				event.preventDefault();
-				lastFocusable.focus();
-			}
-		} else {
-			// Tab: if on last element, wrap to first
-			if (document.activeElement === lastFocusable) {
-				event.preventDefault();
-				firstFocusable.focus();
+		// Find current element's index
+		let currentIndex = -1;
+		for (let i = 0; i < sortedFocusables.length; i++) {
+			if (document.activeElement === sortedFocusables[i]) {
+				currentIndex = i;
+				break;
 			}
 		}
+
+		let nextIndex: number;
+		if (event.shiftKey) {
+			// Shift + Tab: move to previous, wrap to last if at first
+			nextIndex = currentIndex <= 0 ? sortedFocusables.length - 1 : currentIndex - 1;
+		} else {
+			// Tab: move to next, wrap to first if at last
+			nextIndex = currentIndex >= sortedFocusables.length - 1 ? 0 : currentIndex + 1;
+		}
+
+		sortedFocusables[nextIndex].focus();
 	}
 
 	initAnimationStrategy() {
