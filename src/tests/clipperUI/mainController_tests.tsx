@@ -130,89 +130,6 @@ export class MainControllerTests extends TestModule {
 			Assert.tabOrderIsIncremental([Constants.Ids.launchOneNoteButton, Constants.Ids.closeButton]);
 		});
 
-		test("On the clip success panel, focus trap should wrap focus from last to first element on Tab", () => {
-			let controllerInstance = MithrilUtils.mountToFixture(this.defaultComponent);
-
-			MithrilUtils.simulateAction(() => {
-				controllerInstance.state.currentPanel = PanelType.ClippingSuccess;
-			});
-
-			let closeButton = document.getElementById(Constants.Ids.closeButton);
-			let launchOneNoteButton = document.getElementById(Constants.Ids.launchOneNoteButton);
-
-			// Focus on the close button (last element)
-			closeButton.focus();
-			strictEqual(document.activeElement, closeButton, "Focus should be on close button");
-
-			// Simulate Tab key press
-			let tabEvent = new KeyboardEvent("keydown", {
-				keyCode: Constants.KeyCodes.tab,
-				shiftKey: false,
-				bubbles: true
-			});
-
-			// Call handleFocusTrap directly since keydown events may not propagate in test environment
-			controllerInstance.handleFocusTrap(tabEvent);
-
-			// Verify focus wrapped to first element (if event was not prevented, focus would stay)
-			if (tabEvent.defaultPrevented) {
-				strictEqual(document.activeElement, launchOneNoteButton,
-					"Focus should wrap to the first focusable element (launchOneNoteButton) after Tab on last element");
-			}
-		});
-
-		test("On the clip success panel, focus trap should wrap focus from first to last element on Shift+Tab", () => {
-			let controllerInstance = MithrilUtils.mountToFixture(this.defaultComponent);
-
-			MithrilUtils.simulateAction(() => {
-				controllerInstance.state.currentPanel = PanelType.ClippingSuccess;
-			});
-
-			let closeButton = document.getElementById(Constants.Ids.closeButton);
-			let launchOneNoteButton = document.getElementById(Constants.Ids.launchOneNoteButton);
-
-			// Focus on the launchOneNoteButton (first element)
-			launchOneNoteButton.focus();
-			strictEqual(document.activeElement, launchOneNoteButton, "Focus should be on launchOneNoteButton");
-
-			// Simulate Shift+Tab key press
-			let shiftTabEvent = new KeyboardEvent("keydown", {
-				keyCode: Constants.KeyCodes.tab,
-				shiftKey: true,
-				bubbles: true
-			});
-
-			// Call handleFocusTrap directly
-			controllerInstance.handleFocusTrap(shiftTabEvent);
-
-			// Verify focus wrapped to last element
-			if (shiftTabEvent.defaultPrevented) {
-				strictEqual(document.activeElement, closeButton,
-					"Focus should wrap to the last focusable element (closeButton) after Shift+Tab on first element");
-			}
-		});
-
-		test("Focus trap should not be active when not on success panel", () => {
-			let controllerInstance = MithrilUtils.mountToFixture(this.defaultComponent);
-
-			MithrilUtils.simulateAction(() => {
-				controllerInstance.state.currentPanel = PanelType.ClipOptions;
-			});
-
-			// Create a Tab event
-			let tabEvent = new KeyboardEvent("keydown", {
-				keyCode: Constants.KeyCodes.tab,
-				shiftKey: false,
-				bubbles: true
-			});
-
-			// Call handleFocusTrap - it should return early without preventing default
-			controllerInstance.handleFocusTrap(tabEvent);
-
-			ok(!tabEvent.defaultPrevented,
-				"Focus trap should not prevent default when not on success panel");
-		});
-
 		test("On the clip failure panel, the tab order is correct", () => {
 			let controllerInstance = MithrilUtils.mountToFixture(this.defaultComponent);
 
@@ -230,6 +147,50 @@ export class MainControllerTests extends TestModule {
 				dialogButtons.push(dialogButtonContainer.firstChild);
 			}
 			Assert.equalTabIndexes(dialogButtons);
+		});
+
+		test("On the region instructions panel, focus traps between cancel button and close button on Tab", () => {
+			let controllerInstance = MithrilUtils.mountToFixture(this.defaultComponent);
+
+			MithrilUtils.simulateAction(() => {
+				controllerInstance.state.currentPanel = PanelType.RegionInstructions;
+			});
+
+			let cancelButton = document.getElementById(Constants.Ids.regionClipCancelButton);
+			let closeButton = document.getElementById(Constants.Ids.closeButton);
+
+			// Focus on cancel button and tab - should move to close button
+			cancelButton.focus();
+			let tabEvent = new KeyboardEvent("keydown", { keyCode: Constants.KeyCodes.tab, bubbles: true });
+			document.dispatchEvent(tabEvent);
+			strictEqual(document.activeElement, closeButton, "Tab from cancel button should focus close button");
+
+			// Tab again - should wrap to cancel button
+			tabEvent = new KeyboardEvent("keydown", { keyCode: Constants.KeyCodes.tab, bubbles: true });
+			document.dispatchEvent(tabEvent);
+			strictEqual(document.activeElement, cancelButton, "Tab from close button should wrap to cancel button");
+		});
+
+		test("On the success panel, focus traps between launch button and close button on Tab", () => {
+			let controllerInstance = MithrilUtils.mountToFixture(this.defaultComponent);
+
+			MithrilUtils.simulateAction(() => {
+				controllerInstance.state.currentPanel = PanelType.ClippingSuccess;
+			});
+
+			let launchButton = document.getElementById(Constants.Ids.launchOneNoteButton);
+			let closeButton = document.getElementById(Constants.Ids.closeButton);
+
+			// Focus on launch button and tab - should move to close button
+			launchButton.focus();
+			let tabEvent = new KeyboardEvent("keydown", { keyCode: Constants.KeyCodes.tab, bubbles: true });
+			document.dispatchEvent(tabEvent);
+			strictEqual(document.activeElement, closeButton, "Tab from launch button should focus close button");
+
+			// Tab again - should wrap to launch button
+			tabEvent = new KeyboardEvent("keydown", { keyCode: Constants.KeyCodes.tab, bubbles: true });
+			document.dispatchEvent(tabEvent);
+			strictEqual(document.activeElement, launchButton, "Tab from close button should wrap to launch button");
 		});
 
 		test("On the clip failure panel, the right message is displayed for a particular API error code", () => {
