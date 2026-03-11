@@ -82,6 +82,10 @@ export class MainControllerClass extends ComponentBase<MainControllerState, Main
 			if (event.keyCode === Constants.KeyCodes.esc) {
 				this.handleEscPress();
 			}
+			// Handle focus trap for success panel (A11y fix)
+			if (event.keyCode === Constants.KeyCodes.tab) {
+				this.handleFocusTrap(event);
+			}
 		};
 	}
 
@@ -95,6 +99,72 @@ export class MainControllerClass extends ComponentBase<MainControllerState, Main
 		if (this.isCloseable()) {
 			this.closeClipper(CloseReason.EscPress);
 		}
+	}
+
+	/**
+	 * Handles focus trapping within certain panels to prevent keyboard focus from escaping
+	 * when navigating with Tab key. This ensures accessibility compliance by keeping focus
+	 * within the popup until the user explicitly closes it.
+	 */
+	handleFocusTrap(event: KeyboardEvent) {
+		// Only trap focus for specific panels that need it
+		if (this.state.currentPanel !== PanelType.ClippingSuccess &&
+			this.state.currentPanel !== PanelType.RegionInstructions) {
+			return;
+		}
+
+		let mainController = document.getElementById(Constants.Ids.mainController);
+		if (!mainController) {
+			return;
+		}
+
+		// Get all focusable elements within the main controller
+		let focusableElements = mainController.querySelectorAll(
+			"a[tabindex], button[tabindex], input[tabindex], [tabindex]:not([tabindex='-1'])"
+		);
+
+		if (focusableElements.length === 0) {
+			return;
+		}
+
+		// Filter to only include elements with positive tabIndex and sort by tabIndex
+		let sortedFocusables: HTMLElement[] = [];
+		for (let i = 0; i < focusableElements.length; i++) {
+			let element = focusableElements[i] as HTMLElement;
+			if (element.tabIndex >= 0) {
+				sortedFocusables.push(element);
+			}
+		}
+
+		if (sortedFocusables.length === 0) {
+			return;
+		}
+
+		// Sort by tabIndex
+		sortedFocusables.sort((a, b) => a.tabIndex - b.tabIndex);
+
+		// Always handle Tab manually to prevent focus from escaping the iframe
+		event.preventDefault();
+
+		// Find current element's index
+		let currentIndex = -1;
+		for (let i = 0; i < sortedFocusables.length; i++) {
+			if (document.activeElement === sortedFocusables[i]) {
+				currentIndex = i;
+				break;
+			}
+		}
+
+		let nextIndex: number;
+		if (event.shiftKey) {
+			// Shift + Tab: move to previous, wrap to last if at first
+			nextIndex = currentIndex <= 0 ? sortedFocusables.length - 1 : currentIndex - 1;
+		} else {
+			// Tab: move to next, wrap to first if at last
+			nextIndex = currentIndex >= sortedFocusables.length - 1 ? 0 : currentIndex + 1;
+		}
+
+		sortedFocusables[nextIndex].focus();
 	}
 
 	initAnimationStrategy() {
