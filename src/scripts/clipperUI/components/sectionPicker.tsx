@@ -296,10 +296,10 @@ export class SectionPickerClass extends ComponentBase<SectionPickerState, Sectio
 
 		return (
 			<div id={Constants.Ids.locationPickerContainer} {...this.onElementFirstDraw(this.addSrOnlyLocationDiv)}>
-				<div id={Constants.Ids.optionLabel} className="optionLabel">
-					<label htmlFor={Constants.Ids.sectionLocationContainer} aria-label={locationString} className="buttonLabelFont" style={Localization.getFontFamilyAsStyle(Localization.FontFamily.Regular)}>
-						<span aria-hidden="true">{locationString}</span>
-					</label>
+				<div id={Constants.Ids.optionLabel} className="optionLabel" aria-hidden="true">
+					<span className="buttonLabelFont" style={Localization.getFontFamilyAsStyle(Localization.FontFamily.Regular)}>
+						{locationString}
+					</span>
 				</div>
 				<OneNotePicker.OneNotePickerComponent
 					id={Constants.Ids.sectionLocationContainer}
