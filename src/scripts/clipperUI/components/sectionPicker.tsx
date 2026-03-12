@@ -54,6 +54,13 @@ export class SectionPickerClass extends ComponentBase<SectionPickerState, Sectio
 			// If the user selects a section, onPopupToggle will fire because it closes the popup, even though it wasn't a click
 			// so logging only when they open it is potentially the next best thing
 			Clipper.logger.logClickEvent(Log.Click.Label.sectionPickerLocationContainer);
+		} else {
+			// Restore focus to the dropdown trigger when popup closes (e.g., via Escape key)
+			// This ensures keyboard users don't lose focus after closing the dropdown
+			const locationContainer = document.getElementById(Constants.Ids.sectionLocationContainer);
+			if (locationContainer) {
+				locationContainer.focus();
+			}
 		}
 		this.props.onPopupToggle(shouldNowBeOpen);
 	}
