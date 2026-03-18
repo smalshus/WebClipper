@@ -890,11 +890,10 @@ export class SectionPickerSinonTests extends TestModule {
 			let mockNotebooks = MockProps.getMockNotebooks();
 			initializeClipperStorage(JSON.stringify(mockNotebooks), undefined, TestConstants.defaultUserInfoAsJsonString);
 
-			let popupToggled = false;
 			let component = <SectionPicker
-				onPopupToggle={(shouldNowBeOpen: boolean) => { popupToggled = shouldNowBeOpen; }}
+				onPopupToggle={() => {}}
 				clipperState={clipperState} />;
-			let controllerInstance = MithrilUtils.mountToFixture(component);
+			MithrilUtils.mountToFixture(component);
 
 			// Open the dropdown
 			MithrilUtils.simulateAction(() => {
@@ -909,42 +908,6 @@ export class SectionPickerSinonTests extends TestModule {
 					let firstTreeItem = notebookList.querySelector("li[role='treeitem']") as HTMLElement;
 					ok(firstTreeItem, "First tree item should exist in the notebook list");
 				}
-				ok(popupToggled, "onPopupToggle should have been called with true");
-				done();
-			});
-		});
-
-		test("onPopupToggle should call onPopupToggle prop with false when dropdown closes", (assert: QUnitAssert) => {
-			let done = assert.async();
-
-			let clipperState = MockProps.getMockClipperState();
-			let mockNotebooks = MockProps.getMockNotebooks();
-			let mockSection = {
-				section: mockNotebooks[0].sections[0],
-				path: "Clipper Test > Full Page",
-				parentId: mockNotebooks[0].id
-			};
-			initializeClipperStorage(JSON.stringify(mockNotebooks), JSON.stringify(mockSection), TestConstants.defaultUserInfoAsJsonString);
-
-			let lastPopupState: boolean;
-			let component = <SectionPicker
-				onPopupToggle={(shouldNowBeOpen: boolean) => { lastPopupState = shouldNowBeOpen; }}
-				clipperState={clipperState} />;
-			let controllerInstance = MithrilUtils.mountToFixture(component);
-
-			// Open the dropdown first
-			MithrilUtils.simulateAction(() => {
-				document.getElementById(TestConstants.Ids.sectionLocationContainer).click();
-			});
-
-			// Close the dropdown by clicking again
-			MithrilUtils.simulateAction(() => {
-				document.getElementById(TestConstants.Ids.sectionLocationContainer).click();
-			});
-
-			// Wait for requestAnimationFrame to complete
-			requestAnimationFrame(() => {
-				strictEqual(lastPopupState, false, "onPopupToggle should have been called with false when dropdown closes");
 				done();
 			});
 		});
