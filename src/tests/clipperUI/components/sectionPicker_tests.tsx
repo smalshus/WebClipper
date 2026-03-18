@@ -273,7 +273,8 @@ export class SectionPickerTests extends TestModule {
 			strictEqual(actual, undefined, "The section info should be formatted correctly");
 		});
 
-		test("onPopupToggle should restore focus to sectionLocationContainer when popup closes", () => {
+		test("onPopupToggle should restore focus to sectionLocationContainer when popup closes", (assert: QUnitAssert) => {
+			let done = assert.async();
 			let clipperState = MockProps.getMockClipperState();
 			let mockNotebooks = MockProps.getMockNotebooks();
 			initializeClipperStorage(JSON.stringify(mockNotebooks), undefined);
@@ -297,13 +298,17 @@ export class SectionPickerTests extends TestModule {
 			// Close the popup by calling onPopupToggle with false
 			controllerInstance.onPopupToggle(false);
 
-			// Verify focus was restored to the location container
-			strictEqual(document.activeElement.id, TestConstants.Ids.sectionLocationContainer,
-				"Focus should be restored to sectionLocationContainer when popup closes");
-			ok(popupToggleCalled, "The parent onPopupToggle callback should have been called");
+			// Wait for the deferred focus (setTimeout) to execute
+			setTimeout(() => {
+				// Verify focus was restored to the location container
+				strictEqual(document.activeElement.id, TestConstants.Ids.sectionLocationContainer,
+					"Focus should be restored to sectionLocationContainer when popup closes");
+				ok(popupToggleCalled, "The parent onPopupToggle callback should have been called");
 
-			// Clean up
-			document.body.removeChild(anotherElement);
+				// Clean up
+				document.body.removeChild(anotherElement);
+				done();
+			}, 10);
 		});
 	}
 }

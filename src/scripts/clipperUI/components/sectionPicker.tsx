@@ -57,10 +57,13 @@ export class SectionPickerClass extends ComponentBase<SectionPickerState, Sectio
 		} else {
 			// Restore focus to the dropdown trigger when popup closes (e.g., via Escape key)
 			// This ensures keyboard users don't lose focus after closing the dropdown
-			const locationContainer = document.getElementById(Constants.Ids.sectionLocationContainer);
-			if (locationContainer) {
-				locationContainer.focus();
-			}
+			// Use setTimeout to defer focus until after the picker's internal DOM updates complete
+			setTimeout(() => {
+				const locationContainer = document.getElementById(Constants.Ids.sectionLocationContainer);
+				if (locationContainer) {
+					locationContainer.focus();
+				}
+			}, 0);
 		}
 		this.props.onPopupToggle(shouldNowBeOpen);
 	}
