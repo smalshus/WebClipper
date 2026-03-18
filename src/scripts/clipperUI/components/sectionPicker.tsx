@@ -54,16 +54,6 @@ export class SectionPickerClass extends ComponentBase<SectionPickerState, Sectio
 			// If the user selects a section, onPopupToggle will fire because it closes the popup, even though it wasn't a click
 			// so logging only when they open it is potentially the next best thing
 			Clipper.logger.logClickEvent(Log.Click.Label.sectionPickerLocationContainer);
-		} else {
-			// Restore focus to the dropdown trigger when popup closes (e.g., via Escape key)
-			// This ensures keyboard users don't lose focus after closing the dropdown
-			// Use setTimeout to defer focus until after the picker's internal DOM updates complete
-			setTimeout(() => {
-				const locationContainer = document.getElementById(Constants.Ids.sectionLocationContainer);
-				if (locationContainer) {
-					locationContainer.focus();
-				}
-			}, 0);
 		}
 		this.props.onPopupToggle(shouldNowBeOpen);
 	}
@@ -245,6 +235,32 @@ export class SectionPickerClass extends ComponentBase<SectionPickerState, Sectio
 		};
 	}
 
+	
+	// Attach escape key handler to return focus to the dropdown button when Escape is pressed
+	// This is needed because the OneNotePicker component handles Escape internally without calling onPopupToggle
+	attachEscapeFocusHandler(element: HTMLElement, isInitialized: boolean) {
+		if (!isInitialized) {
+			const escKeyCode = 27;
+			const handleKeyDown = (ev: KeyboardEvent) => {
+				if (ev.keyCode === escKeyCode) {
+					// Check if the dropdown popup is currently visible
+					let sectionPickerPopup = document.querySelector(".SectionPickerPopup");
+					if (sectionPickerPopup) {
+						// The popup is open - schedule focus return after it closes
+						setTimeout(() => {
+							let locationButton = document.getElementById(Constants.Ids.sectionLocationContainer);
+							if (locationButton) {
+								locationButton.focus();
+							}
+						}, 10);
+					}
+				}
+			};
+			// Use capture phase to run before OneNotePicker's handler
+			document.addEventListener("keydown", handleKeyDown, true);
+		}
+	}
+
 	addSrOnlyLocationDiv(element: HTMLElement) {
 		const pickerLinkElement = document.getElementById(Constants.Ids.sectionLocationContainer);
 		if (!pickerLinkElement) {
@@ -256,6 +272,9 @@ export class SectionPickerClass extends ComponentBase<SectionPickerState, Sectio
 		srDiv.setAttribute("class", Constants.Classes.srOnly);
 		// Make srDiv the first child of pickerLinkElement
 		pickerLinkElement.insertBefore(srDiv, pickerLinkElement.firstChild);
+
+		// Attach escape key handler to return focus to the dropdown button
+		this.attachEscapeFocusHandler(element, false);
 	}
 
 	render() {
