@@ -54,62 +54,18 @@ export class SectionPickerClass extends ComponentBase<SectionPickerState, Sectio
 			// If the user selects a section, onPopupToggle will fire because it closes the popup, even though it wasn't a click
 			// so logging only when they open it is potentially the next best thing
 			Clipper.logger.logClickEvent(Log.Click.Label.sectionPickerLocationContainer);
-
-			// A11y fix: Focus on the selected item when the popup opens via keyboard
-			// Use setTimeout to ensure the popup has fully rendered before trying to focus.
-			// requestAnimationFrame alone may fire before the external OneNotePickerComponent
-			// has finished rendering the popup and its interactive elements.
-			setTimeout(() => {
-				this.focusOnSelectedSectionInPopup();
-			}, 100);
+			// Move focus to the first item in the dropdown when it opens
+			requestAnimationFrame(() => {
+				let notebookList = document.getElementById("notebookList");
+				if (notebookList) {
+					let firstTreeItem = notebookList.querySelector("li[role='treeitem']") as HTMLElement;
+					if (firstTreeItem) {
+						firstTreeItem.focus();
+					}
+				}
+			});
 		}
 		this.props.onPopupToggle(shouldNowBeOpen);
-	}
-
-	// Focuses on the currently selected section in the popup for keyboard accessibility
-	private focusOnSelectedSectionInPopup(): void {
-		const curSectionId = this.state.curSection && this.state.curSection.section ? this.state.curSection.section.id : undefined;
-		if (!curSectionId) {
-			// No section selected, try to focus on the first focusable item in the popup
-			this.focusOnFirstItemInPopup();
-			return;
-		}
-
-		// Try to find the selected section by aria-selected attribute
-		let selectedElement = document.querySelector('[aria-selected="true"]') as HTMLElement;
-
-		// If not found, try to find by data-id attribute matching the current section ID
-		if (!selectedElement) {
-			selectedElement = document.querySelector(`[data-id="${curSectionId}"]`) as HTMLElement;
-		}
-
-		// If not found, try to find by id attribute matching the current section ID
-		if (!selectedElement) {
-			selectedElement = document.getElementById(curSectionId);
-		}
-
-		if (selectedElement) {
-			// Ensure the element is focusable
-			if (!selectedElement.hasAttribute("tabindex")) {
-				selectedElement.setAttribute("tabindex", "-1");
-			}
-			selectedElement.focus();
-		} else {
-			// Fallback: focus on the first focusable item in the popup
-			this.focusOnFirstItemInPopup();
-		}
-	}
-
-	// Fallback method to focus on the first focusable item in the popup
-	private focusOnFirstItemInPopup(): void {
-		const popup = document.querySelector(".SectionPickerPopup") as HTMLElement;
-		if (popup) {
-			// Find the first focusable element within the popup
-			const focusableElement = popup.querySelector('a, button, [tabindex]:not([tabindex="-1"]), [role="option"], [role="treeitem"]') as HTMLElement;
-			if (focusableElement) {
-				focusableElement.focus();
-			}
-		}
 	}
 
 	// Returns true if successful; false otherwise
