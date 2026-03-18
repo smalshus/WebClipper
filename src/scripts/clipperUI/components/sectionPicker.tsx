@@ -56,10 +56,12 @@ export class SectionPickerClass extends ComponentBase<SectionPickerState, Sectio
 			Clipper.logger.logClickEvent(Log.Click.Label.sectionPickerLocationContainer);
 
 			// A11y fix: Focus on the selected item when the popup opens via keyboard
-			// Use requestAnimationFrame to ensure the popup has rendered before trying to focus
-			requestAnimationFrame(() => {
+			// Use setTimeout to ensure the popup has fully rendered before trying to focus.
+			// requestAnimationFrame alone may fire before the external OneNotePickerComponent
+			// has finished rendering the popup and its interactive elements.
+			setTimeout(() => {
 				this.focusOnSelectedSectionInPopup();
-			});
+			}, 100);
 		}
 		this.props.onPopupToggle(shouldNowBeOpen);
 	}
