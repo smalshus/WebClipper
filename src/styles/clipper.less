@@ -267,7 +267,23 @@
 		forced-color-adjust: none;
 		filter: drop-shadow(0 0 1px CanvasText) drop-shadow(0 0 1px CanvasText);
 	}
-	
+
+	// Ensure selected state of font radio buttons is visible in high contrast themes (Aquatic, Desert, etc.)
+	.control-button.active {
+		forced-color-adjust: none;
+		background-color: Highlight !important;
+		color: HighlightText !important;
+		border: 2px solid HighlightText !important;
+	}
+
+	// Ensure selected state of mode buttons is visible in high contrast themes
+	.modeButton.selected {
+		forced-color-adjust: none;
+		background-color: Highlight !important;
+		color: HighlightText !important;
+		border: 2px solid HighlightText !important;
+	}
+
 }
 
 @media screen and (-ms-high-contrast: black-on-white) {
