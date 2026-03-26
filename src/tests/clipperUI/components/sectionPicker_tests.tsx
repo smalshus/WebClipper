@@ -272,6 +272,44 @@ export class SectionPickerTests extends TestModule {
 			let actual = SectionPickerClass.formatSectionInfoForStorage([]);
 			strictEqual(actual, undefined, "The section info should be formatted correctly");
 		});
+
+		test("onPopupToggle should restore focus to sectionLocationContainer when popup closes", (assert: QUnitAssert) => {
+			let done = assert.async();
+			let clipperState = MockProps.getMockClipperState();
+			let mockNotebooks = MockProps.getMockNotebooks();
+			initializeClipperStorage(JSON.stringify(mockNotebooks), undefined);
+
+			let popupToggleCalled = false;
+			let component = <SectionPicker
+				onPopupToggle={() => { popupToggleCalled = true; }}
+				clipperState={clipperState} />;
+			let controllerInstance = MithrilUtils.mountToFixture(component);
+
+			// Open the popup first
+			MithrilUtils.simulateAction(() => {
+				document.getElementById(TestConstants.Ids.sectionLocationContainer).click();
+			});
+
+			// Focus another element to simulate focus being elsewhere
+			let anotherElement = document.createElement("button");
+			document.body.appendChild(anotherElement);
+			anotherElement.focus();
+
+			// Close the popup by calling onPopupToggle with false
+			controllerInstance.onPopupToggle(false);
+
+			// Wait for the deferred focus (setTimeout) to execute
+			setTimeout(() => {
+				// Verify focus was restored to the location container
+				strictEqual(document.activeElement.id, TestConstants.Ids.sectionLocationContainer,
+					"Focus should be restored to sectionLocationContainer when popup closes");
+				ok(popupToggleCalled, "The parent onPopupToggle callback should have been called");
+
+				// Clean up
+				document.body.removeChild(anotherElement);
+				done();
+			}, 10);
+		});
 	}
 }
 

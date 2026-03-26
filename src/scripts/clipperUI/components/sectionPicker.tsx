@@ -235,6 +235,32 @@ export class SectionPickerClass extends ComponentBase<SectionPickerState, Sectio
 		};
 	}
 
+	
+	// Attach escape key handler to return focus to the dropdown button when Escape is pressed
+	// This is needed because the OneNotePicker component handles Escape internally without calling onPopupToggle
+	attachEscapeFocusHandler(element: HTMLElement, isInitialized: boolean) {
+		if (!isInitialized) {
+			const escKeyCode = 27;
+			const handleKeyDown = (ev: KeyboardEvent) => {
+				if (ev.keyCode === escKeyCode) {
+					// Check if the dropdown popup is currently visible
+					let sectionPickerPopup = document.querySelector(".SectionPickerPopup");
+					if (sectionPickerPopup) {
+						// The popup is open - schedule focus return after it closes
+						setTimeout(() => {
+							let locationButton = document.getElementById(Constants.Ids.sectionLocationContainer);
+							if (locationButton) {
+								locationButton.focus();
+							}
+						}, 10);
+					}
+				}
+			};
+			// Use capture phase to run before OneNotePicker's handler
+			document.addEventListener("keydown", handleKeyDown, true);
+		}
+	}
+
 	addSrOnlyLocationDiv(element: HTMLElement) {
 		const pickerLinkElement = document.getElementById(Constants.Ids.sectionLocationContainer);
 		if (!pickerLinkElement) {
@@ -246,6 +272,9 @@ export class SectionPickerClass extends ComponentBase<SectionPickerState, Sectio
 		srDiv.setAttribute("class", Constants.Classes.srOnly);
 		// Make srDiv the first child of pickerLinkElement
 		pickerLinkElement.insertBefore(srDiv, pickerLinkElement.firstChild);
+
+		// Attach escape key handler to return focus to the dropdown button
+		this.attachEscapeFocusHandler(element, false);
 	}
 
 	render() {
