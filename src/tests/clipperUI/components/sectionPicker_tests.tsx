@@ -272,6 +272,104 @@ export class SectionPickerTests extends TestModule {
 			let actual = SectionPickerClass.formatSectionInfoForStorage([]);
 			strictEqual(actual, undefined, "The section info should be formatted correctly");
 		});
+
+		test("onPopupToggle should focus the currently selected section element when the popup opens and a curSection is set", (assert: QUnitAssert) => {
+			let done = assert.async();
+			let clock = sinon.useFakeTimers();
+
+			let clipperState = MockProps.getMockClipperState();
+			let mockNotebooks = MockProps.getMockNotebooks();
+			let mockSection = {
+				section: mockNotebooks[0].sections[0],
+				path: "Clipper Test > Full Page",
+				parentId: mockNotebooks[0].id
+			};
+			initializeClipperStorage(JSON.stringify(mockNotebooks), JSON.stringify(mockSection));
+
+			let component = <SectionPicker onPopupToggle={() => {}} clipperState={clipperState} />;
+			let controllerInstance = MithrilUtils.mountToFixture(component);
+
+			// Create a fake section element in the DOM that matches the selected section id
+			let sectionElement = document.createElement("li");
+			sectionElement.id = mockSection.section.id;
+			sectionElement.tabIndex = 70;
+			let focusCalled = false;
+			sectionElement.focus = () => { focusCalled = true; };
+			document.body.appendChild(sectionElement);
+
+			controllerInstance.onPopupToggle(true);
+			clock.tick(0);
+
+			ok(focusCalled, "The selected section element should have been focused when the popup opens");
+
+			document.body.removeChild(sectionElement);
+			clock.restore();
+			done();
+		});
+
+		test("onPopupToggle should focus the first focusable item in the picker popup when the popup opens and no curSection is set", (assert: QUnitAssert) => {
+			let done = assert.async();
+			let clock = sinon.useFakeTimers();
+
+			let clipperState = MockProps.getMockClipperState();
+			initializeClipperStorage(undefined, undefined);
+
+			let component = <SectionPicker onPopupToggle={() => {}} clipperState={clipperState} />;
+			let controllerInstance = MithrilUtils.mountToFixture(component);
+
+			// Create a fake popup container and a focusable item inside it
+			let sectionPickerPopup = document.createElement("div");
+			sectionPickerPopup.id = "sectionPickerContainer";
+			let firstItem = document.createElement("li");
+			firstItem.tabIndex = 70;
+			let focusCalled = false;
+			firstItem.focus = () => { focusCalled = true; };
+			sectionPickerPopup.appendChild(firstItem);
+			document.body.appendChild(sectionPickerPopup);
+
+			controllerInstance.onPopupToggle(true);
+			clock.tick(0);
+
+			ok(focusCalled, "The first focusable item in the picker popup should have been focused when no section is selected");
+
+			document.body.removeChild(sectionPickerPopup);
+			clock.restore();
+			done();
+		});
+
+		test("onPopupToggle should not change focus when the popup closes", (assert: QUnitAssert) => {
+			let done = assert.async();
+			let clock = sinon.useFakeTimers();
+
+			let clipperState = MockProps.getMockClipperState();
+			let mockNotebooks = MockProps.getMockNotebooks();
+			let mockSection = {
+				section: mockNotebooks[0].sections[0],
+				path: "Clipper Test > Full Page",
+				parentId: mockNotebooks[0].id
+			};
+			initializeClipperStorage(JSON.stringify(mockNotebooks), JSON.stringify(mockSection));
+
+			let component = <SectionPicker onPopupToggle={() => {}} clipperState={clipperState} />;
+			let controllerInstance = MithrilUtils.mountToFixture(component);
+
+			// Create a fake section element to catch any unexpected focus calls
+			let sectionElement = document.createElement("li");
+			sectionElement.id = mockSection.section.id;
+			sectionElement.tabIndex = 70;
+			let focusCalled = false;
+			sectionElement.focus = () => { focusCalled = true; };
+			document.body.appendChild(sectionElement);
+
+			controllerInstance.onPopupToggle(false);
+			clock.tick(0);
+
+			ok(!focusCalled, "No focus change should occur when the popup closes");
+
+			document.body.removeChild(sectionElement);
+			clock.restore();
+			done();
+		});
 	}
 }
 

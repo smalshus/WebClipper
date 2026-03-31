@@ -56,6 +56,27 @@ export class SectionPickerClass extends ComponentBase<SectionPickerState, Sectio
 			Clipper.logger.logClickEvent(Log.Click.Label.sectionPickerLocationContainer);
 		}
 		this.props.onPopupToggle(shouldNowBeOpen);
+		if (shouldNowBeOpen) {
+			// After the popup renders, move keyboard focus to the currently selected section item
+			// so that keyboard users can identify which item is selected and navigate from there
+			setTimeout(() => {
+				let curSectionId = this.state.curSection && this.state.curSection.section ? this.state.curSection.section.id : undefined;
+				let elementToFocus: HTMLElement;
+				if (curSectionId) {
+					elementToFocus = document.getElementById(curSectionId) as HTMLElement;
+				}
+				if (!elementToFocus) {
+					// Fall back to the first keyboard-navigable item in the section picker popup
+					let sectionPickerPopup = document.getElementById("sectionPickerContainer");
+					if (sectionPickerPopup) {
+						elementToFocus = sectionPickerPopup.querySelector("[tabindex]:not([tabindex=\"-1\"])") as HTMLElement;
+					}
+				}
+				if (elementToFocus) {
+					elementToFocus.focus();
+				}
+			}, 0);
+		}
 	}
 
 	// Returns true if successful; false otherwise
