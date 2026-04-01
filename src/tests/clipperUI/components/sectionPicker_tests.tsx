@@ -370,6 +370,86 @@ export class SectionPickerTests extends TestModule {
 			clock.restore();
 			done();
 		});
+
+		test("onPopupToggle should enable Down arrow key to move focus to the next item in the popup", (assert: QUnitAssert) => {
+			let done = assert.async();
+			let clock = sinon.useFakeTimers();
+
+			let clipperState = MockProps.getMockClipperState();
+			initializeClipperStorage(undefined, undefined);
+
+			let component = <SectionPicker onPopupToggle={() => {}} clipperState={clipperState} />;
+			let controllerInstance = MithrilUtils.mountToFixture(component);
+
+			// Create a fake popup with two items
+			let sectionPickerPopup = document.createElement("div");
+			sectionPickerPopup.id = "sectionPickerContainer";
+			let firstItem = document.createElement("li");
+			firstItem.tabIndex = 70;
+			let secondItemFocusCalled = false;
+			let secondItem = document.createElement("li");
+			secondItem.tabIndex = 70;
+			secondItem.focus = () => { secondItemFocusCalled = true; };
+			sectionPickerPopup.appendChild(firstItem);
+			sectionPickerPopup.appendChild(secondItem);
+			document.body.appendChild(sectionPickerPopup);
+
+			controllerInstance.onPopupToggle(true);
+			clock.tick(0);
+
+			// Simulate focus on first item and press Down arrow
+			firstItem.focus();
+			let downKeyEvent = document.createEvent("KeyboardEvent");
+			downKeyEvent.initEvent("keydown", true, true);
+			Object.defineProperty(downKeyEvent, "which", { value: 40 });
+			sectionPickerPopup.dispatchEvent(downKeyEvent);
+
+			ok(secondItemFocusCalled, "Down arrow key should move focus to the next item in the popup");
+
+			document.body.removeChild(sectionPickerPopup);
+			clock.restore();
+			done();
+		});
+
+		test("onPopupToggle should enable Up arrow key to move focus to the previous item in the popup", (assert: QUnitAssert) => {
+			let done = assert.async();
+			let clock = sinon.useFakeTimers();
+
+			let clipperState = MockProps.getMockClipperState();
+			initializeClipperStorage(undefined, undefined);
+
+			let component = <SectionPicker onPopupToggle={() => {}} clipperState={clipperState} />;
+			let controllerInstance = MithrilUtils.mountToFixture(component);
+
+			// Create a fake popup with two items
+			let sectionPickerPopup = document.createElement("div");
+			sectionPickerPopup.id = "sectionPickerContainer";
+			let firstItemFocusCalled = false;
+			let firstItem = document.createElement("li");
+			firstItem.tabIndex = 70;
+			firstItem.focus = () => { firstItemFocusCalled = true; };
+			let secondItem = document.createElement("li");
+			secondItem.tabIndex = 70;
+			sectionPickerPopup.appendChild(firstItem);
+			sectionPickerPopup.appendChild(secondItem);
+			document.body.appendChild(sectionPickerPopup);
+
+			controllerInstance.onPopupToggle(true);
+			clock.tick(0);
+
+			// Simulate focus on second item and press Up arrow
+			secondItem.focus();
+			let upKeyEvent = document.createEvent("KeyboardEvent");
+			upKeyEvent.initEvent("keydown", true, true);
+			Object.defineProperty(upKeyEvent, "which", { value: 38 });
+			sectionPickerPopup.dispatchEvent(upKeyEvent);
+
+			ok(firstItemFocusCalled, "Up arrow key should move focus to the previous item in the popup");
+
+			document.body.removeChild(sectionPickerPopup);
+			clock.restore();
+			done();
+		});
 	}
 }
 
