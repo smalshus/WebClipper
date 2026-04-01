@@ -450,6 +450,65 @@ export class SectionPickerTests extends TestModule {
 			clock.restore();
 			done();
 		});
+
+		test("onPopupToggle should skip hidden items inside closed notebooks when navigating with Down arrow", (assert: QUnitAssert) => {
+			let done = assert.async();
+			let clock = sinon.useFakeTimers();
+
+			let clipperState = MockProps.getMockClipperState();
+			initializeClipperStorage(undefined, undefined);
+
+			let component = <SectionPicker onPopupToggle={() => {}} clipperState={clipperState} />;
+			let controllerInstance = MithrilUtils.mountToFixture(component);
+
+			// Build a structure that mirrors the OneNotePicker DOM:
+			//   sectionPickerContainer
+			//     li.Notebook.Closed (notebook1, tabindex)
+			//       ul
+			//         li.Section (hiddenSection, tabindex) -- inside closed notebook
+			//     li.Notebook.Opened (notebook2, tabindex)
+			let sectionPickerPopup = document.createElement("div");
+			sectionPickerPopup.id = "sectionPickerContainer";
+
+			let notebook1 = document.createElement("li");
+			notebook1.className = "Notebook Closed";
+			notebook1.tabIndex = 70;
+			let closedChildList = document.createElement("ul");
+			let hiddenSection = document.createElement("li");
+			hiddenSection.className = "Section";
+			hiddenSection.tabIndex = 70;
+			let hiddenSectionFocusCalled = false;
+			hiddenSection.focus = () => { hiddenSectionFocusCalled = true; };
+			closedChildList.appendChild(hiddenSection);
+			notebook1.appendChild(closedChildList);
+
+			let notebook2FocusCalled = false;
+			let notebook2 = document.createElement("li");
+			notebook2.className = "Notebook Opened";
+			notebook2.tabIndex = 70;
+			notebook2.focus = () => { notebook2FocusCalled = true; };
+
+			sectionPickerPopup.appendChild(notebook1);
+			sectionPickerPopup.appendChild(notebook2);
+			document.body.appendChild(sectionPickerPopup);
+
+			controllerInstance.onPopupToggle(true);
+			clock.tick(0);
+
+			// Press Down arrow from notebook1 — should jump to notebook2, skipping the hidden section inside notebook1
+			notebook1.focus();
+			let downKeyEvent = document.createEvent("KeyboardEvent");
+			downKeyEvent.initEvent("keydown", true, true);
+			Object.defineProperty(downKeyEvent, "which", { value: 40 });
+			sectionPickerPopup.dispatchEvent(downKeyEvent);
+
+			ok(!hiddenSectionFocusCalled, "Hidden section inside a closed notebook should not receive focus");
+			ok(notebook2FocusCalled, "Down arrow from a closed notebook should move focus to the next visible notebook");
+
+			document.body.removeChild(sectionPickerPopup);
+			clock.restore();
+			done();
+		});
 	}
 }
 

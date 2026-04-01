@@ -88,9 +88,14 @@ export class SectionPickerClass extends ComponentBase<SectionPickerState, Sectio
 							return;
 						}
 						e.preventDefault();
+						// Only include visible items — exclude elements whose parent is inside a "Closed"
+						// collapsed notebook or sectionGroup (children remain in the DOM but are hidden via CSS).
 						let focusableItems = Array.from(
 							sectionPickerPopup.querySelectorAll("[tabindex]:not([tabindex=\"-1\"])")
-						) as HTMLElement[];
+						).filter((el) => {
+							let parent = (el as HTMLElement).parentElement;
+							return !parent || !parent.closest(".Closed");
+						}) as HTMLElement[];
 						if (focusableItems.length === 0) {
 							return;
 						}
