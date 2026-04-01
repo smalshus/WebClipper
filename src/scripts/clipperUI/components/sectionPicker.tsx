@@ -66,6 +66,62 @@ export class SectionPickerClass extends ComponentBase<SectionPickerState, Sectio
 			});
 		}
 		this.props.onPopupToggle(shouldNowBeOpen);
+		if (shouldNowBeOpen) {
+			// After the popup renders, move keyboard focus to the currently selected section item
+			// so that keyboard users can identify which item is selected and navigate from there.
+			// Also attach an arrow key handler so keyboard users can navigate the list with Up/Down.
+			setTimeout(() => {
+				let sectionPickerPopup = document.getElementById("sectionPickerContainer");
+
+				let curSectionId = this.state.curSection && this.state.curSection.section ? this.state.curSection.section.id : undefined;
+				let elementToFocus: HTMLElement;
+				if (curSectionId) {
+					elementToFocus = document.getElementById(curSectionId) as HTMLElement;
+				}
+				if (!elementToFocus && sectionPickerPopup) {
+					// Fall back to the first keyboard-navigable item in the section picker popup
+					elementToFocus = sectionPickerPopup.querySelector("[tabindex]:not([tabindex=\"-1\"])") as HTMLElement;
+				}
+				if (elementToFocus) {
+					elementToFocus.focus();
+				}
+
+				// Attach Up/Down arrow key navigation for the popup list.
+				// The OneNotePicker library only handles Enter/Tab, so we add arrow key support here.
+				// The listener is attached to the popup element which is removed from the DOM when the
+				// popup closes, so there is no need to explicitly clean it up.
+				// Guard against attaching multiple listeners if onPopupToggle(true) is called more than once.
+				// Use capture so the popup still receives Up/Down events before child controls suppress bubbling.
+				if (sectionPickerPopup && !sectionPickerPopup.getAttribute("data-arrow-key-handler-attached")) {
+					sectionPickerPopup.setAttribute("data-arrow-key-handler-attached", "true");
+					sectionPickerPopup.addEventListener("keydown", (e: KeyboardEvent) => {
+						if (e.which !== Constants.KeyCodes.up && e.which !== Constants.KeyCodes.down) {
+							return;
+						}
+						e.preventDefault();
+						// Only include visible items — exclude elements whose parent is inside a "Closed"
+						// collapsed notebook or sectionGroup (children remain in the DOM but are hidden via CSS).
+						let focusableItems = Array.prototype.slice.call(
+							sectionPickerPopup.querySelectorAll("[tabindex]:not([tabindex=\"-1\"])")
+						).filter((el) => {
+							let parent = (el as HTMLElement).parentElement;
+							return !parent || !parent.closest(".Closed");
+						}) as HTMLElement[];
+						if (focusableItems.length === 0) {
+							return;
+						}
+						let currentIndex = focusableItems.indexOf(document.activeElement as HTMLElement);
+						if (e.which === Constants.KeyCodes.up) {
+							let prevIndex = currentIndex <= 0 ? 0 : currentIndex - 1;
+							focusableItems[prevIndex].focus();
+						} else {
+							let nextIndex = currentIndex >= focusableItems.length - 1 ? focusableItems.length - 1 : currentIndex + 1;
+							focusableItems[nextIndex].focus();
+						}
+					}, true);
+				}
+			}, 0);
+		}
 	}
 
 	// Returns true if successful; false otherwise
