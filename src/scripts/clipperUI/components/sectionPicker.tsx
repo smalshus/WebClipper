@@ -81,6 +81,7 @@ export class SectionPickerClass extends ComponentBase<SectionPickerState, Sectio
 				// The listener is attached to the popup element which is removed from the DOM when the
 				// popup closes, so there is no need to explicitly clean it up.
 				// Guard against attaching multiple listeners if onPopupToggle(true) is called more than once.
+				// Use capture so the popup still receives Up/Down events before child controls suppress bubbling.
 				if (sectionPickerPopup && !sectionPickerPopup.getAttribute("data-arrow-key-handler-attached")) {
 					sectionPickerPopup.setAttribute("data-arrow-key-handler-attached", "true");
 					sectionPickerPopup.addEventListener("keydown", (e: KeyboardEvent) => {
@@ -90,7 +91,7 @@ export class SectionPickerClass extends ComponentBase<SectionPickerState, Sectio
 						e.preventDefault();
 						// Only include visible items — exclude elements whose parent is inside a "Closed"
 						// collapsed notebook or sectionGroup (children remain in the DOM but are hidden via CSS).
-						let focusableItems = Array.from(
+						let focusableItems = Array.prototype.slice.call(
 							sectionPickerPopup.querySelectorAll("[tabindex]:not([tabindex=\"-1\"])")
 						).filter((el) => {
 							let parent = (el as HTMLElement).parentElement;
@@ -107,7 +108,7 @@ export class SectionPickerClass extends ComponentBase<SectionPickerState, Sectio
 							let nextIndex = currentIndex >= focusableItems.length - 1 ? focusableItems.length - 1 : currentIndex + 1;
 							focusableItems[nextIndex].focus();
 						}
-					});
+					}, true);
 				}
 			}, 0);
 		}
