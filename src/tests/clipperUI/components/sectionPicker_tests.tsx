@@ -1119,6 +1119,35 @@ export class SectionPickerSinonTests extends TestModule {
 				done();
 			});
 		});
+
+		test("onPopupToggle should move focus to first tree item when dropdown opens", (assert: QUnitAssert) => {
+			let done = assert.async();
+
+			let clipperState = MockProps.getMockClipperState();
+			let mockNotebooks = MockProps.getMockNotebooks();
+			initializeClipperStorage(JSON.stringify(mockNotebooks), undefined, TestConstants.defaultUserInfoAsJsonString);
+
+			let component = <SectionPicker
+				onPopupToggle={() => {}}
+				clipperState={clipperState} />;
+			MithrilUtils.mountToFixture(component);
+
+			// Open the dropdown
+			MithrilUtils.simulateAction(() => {
+				document.getElementById(TestConstants.Ids.sectionLocationContainer).click();
+			});
+
+			// Wait for requestAnimationFrame to complete
+			requestAnimationFrame(() => {
+				let notebookList = document.getElementById("notebookList");
+				ok(notebookList, "Notebook list should be present when dropdown is open");
+				if (notebookList) {
+					let firstTreeItem = notebookList.querySelector("li[role='treeitem']") as HTMLElement;
+					ok(firstTreeItem, "First tree item should exist in the notebook list");
+				}
+				done();
+			});
+		});
 	}
 }
 

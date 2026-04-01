@@ -149,6 +149,50 @@ export class MainControllerTests extends TestModule {
 			Assert.equalTabIndexes(dialogButtons);
 		});
 
+		test("On the region instructions panel, focus traps between cancel button and close button on Tab", () => {
+			let controllerInstance = MithrilUtils.mountToFixture(this.defaultComponent);
+
+			MithrilUtils.simulateAction(() => {
+				controllerInstance.state.currentPanel = PanelType.RegionInstructions;
+			});
+
+			let cancelButton = document.getElementById(Constants.Ids.regionClipCancelButton);
+			let closeButton = document.getElementById(Constants.Ids.closeButton);
+
+			// Focus on cancel button and tab - should move to close button
+			cancelButton.focus();
+			let tabEvent = new KeyboardEvent("keydown", { keyCode: Constants.KeyCodes.tab, bubbles: true });
+			document.dispatchEvent(tabEvent);
+			strictEqual(document.activeElement, closeButton, "Tab from cancel button should focus close button");
+
+			// Tab again - should wrap to cancel button
+			tabEvent = new KeyboardEvent("keydown", { keyCode: Constants.KeyCodes.tab, bubbles: true });
+			document.dispatchEvent(tabEvent);
+			strictEqual(document.activeElement, cancelButton, "Tab from close button should wrap to cancel button");
+		});
+
+		test("On the success panel, focus traps between launch button and close button on Tab", () => {
+			let controllerInstance = MithrilUtils.mountToFixture(this.defaultComponent);
+
+			MithrilUtils.simulateAction(() => {
+				controllerInstance.state.currentPanel = PanelType.ClippingSuccess;
+			});
+
+			let launchButton = document.getElementById(Constants.Ids.launchOneNoteButton);
+			let closeButton = document.getElementById(Constants.Ids.closeButton);
+
+			// Focus on launch button and tab - should move to close button
+			launchButton.focus();
+			let tabEvent = new KeyboardEvent("keydown", { keyCode: Constants.KeyCodes.tab, bubbles: true });
+			document.dispatchEvent(tabEvent);
+			strictEqual(document.activeElement, closeButton, "Tab from launch button should focus close button");
+
+			// Tab again - should wrap to launch button
+			tabEvent = new KeyboardEvent("keydown", { keyCode: Constants.KeyCodes.tab, bubbles: true });
+			document.dispatchEvent(tabEvent);
+			strictEqual(document.activeElement, launchButton, "Tab from close button should wrap to launch button");
+		});
+
 		test("On the clip failure panel, the right message is displayed for a particular API error code", () => {
 			let controllerInstance = MithrilUtils.mountToFixture(this.defaultComponent);
 

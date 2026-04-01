@@ -54,6 +54,16 @@ export class SectionPickerClass extends ComponentBase<SectionPickerState, Sectio
 			// If the user selects a section, onPopupToggle will fire because it closes the popup, even though it wasn't a click
 			// so logging only when they open it is potentially the next best thing
 			Clipper.logger.logClickEvent(Log.Click.Label.sectionPickerLocationContainer);
+			// Move focus to the first item in the dropdown when it opens
+			requestAnimationFrame(() => {
+				let notebookList = document.getElementById("notebookList");
+				if (notebookList) {
+					let firstTreeItem = notebookList.querySelector("li[role='treeitem']") as HTMLElement;
+					if (firstTreeItem) {
+						firstTreeItem.focus();
+					}
+				}
+			});
 		}
 		this.props.onPopupToggle(shouldNowBeOpen);
 		if (shouldNowBeOpen) {
@@ -291,6 +301,32 @@ export class SectionPickerClass extends ComponentBase<SectionPickerState, Sectio
 		};
 	}
 
+	
+	// Attach escape key handler to return focus to the dropdown button when Escape is pressed
+	// This is needed because the OneNotePicker component handles Escape internally without calling onPopupToggle
+	attachEscapeFocusHandler(element: HTMLElement, isInitialized: boolean) {
+		if (!isInitialized) {
+			const escKeyCode = 27;
+			const handleKeyDown = (ev: KeyboardEvent) => {
+				if (ev.keyCode === escKeyCode) {
+					// Check if the dropdown popup is currently visible
+					let sectionPickerPopup = document.querySelector(".SectionPickerPopup");
+					if (sectionPickerPopup) {
+						// The popup is open - schedule focus return after it closes
+						setTimeout(() => {
+							let locationButton = document.getElementById(Constants.Ids.sectionLocationContainer);
+							if (locationButton) {
+								locationButton.focus();
+							}
+						}, 10);
+					}
+				}
+			};
+			// Use capture phase to run before OneNotePicker's handler
+			document.addEventListener("keydown", handleKeyDown, true);
+		}
+	}
+
 	addSrOnlyLocationDiv(element: HTMLElement) {
 		const pickerLinkElement = document.getElementById(Constants.Ids.sectionLocationContainer);
 		if (!pickerLinkElement) {
@@ -302,6 +338,9 @@ export class SectionPickerClass extends ComponentBase<SectionPickerState, Sectio
 		srDiv.setAttribute("class", Constants.Classes.srOnly);
 		// Make srDiv the first child of pickerLinkElement
 		pickerLinkElement.insertBefore(srDiv, pickerLinkElement.firstChild);
+
+		// Attach escape key handler to return focus to the dropdown button
+		this.attachEscapeFocusHandler(element, false);
 	}
 
 	render() {
@@ -352,10 +391,10 @@ export class SectionPickerClass extends ComponentBase<SectionPickerState, Sectio
 
 		return (
 			<div id={Constants.Ids.locationPickerContainer} {...this.onElementFirstDraw(this.addSrOnlyLocationDiv)}>
-				<div id={Constants.Ids.optionLabel} className="optionLabel">
-					<label htmlFor={Constants.Ids.sectionLocationContainer} aria-label={locationString} className="buttonLabelFont" style={Localization.getFontFamilyAsStyle(Localization.FontFamily.Regular)}>
-						<span aria-hidden="true">{locationString}</span>
-					</label>
+				<div id={Constants.Ids.optionLabel} className="optionLabel" aria-hidden="true">
+					<span className="buttonLabelFont" style={Localization.getFontFamilyAsStyle(Localization.FontFamily.Regular)}>
+						{locationString}
+					</span>
 				</div>
 				<OneNotePicker.OneNotePickerComponent
 					id={Constants.Ids.sectionLocationContainer}
