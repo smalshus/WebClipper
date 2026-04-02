@@ -67,9 +67,7 @@ export class SectionPickerClass extends ComponentBase<SectionPickerState, Sectio
 		}
 		this.props.onPopupToggle(shouldNowBeOpen);
 		if (shouldNowBeOpen) {
-			// After the popup renders, move keyboard focus to the currently selected section item
-			// so that keyboard users can identify which item is selected and navigate from there.
-			// Also attach an arrow key handler so keyboard users can navigate the list with Up/Down.
+			// Focus the selected section and attach arrow key navigation for keyboard users
 			setTimeout(() => {
 				let sectionPickerPopup = document.getElementById("sectionPickerContainer");
 
@@ -86,12 +84,7 @@ export class SectionPickerClass extends ComponentBase<SectionPickerState, Sectio
 					elementToFocus.focus();
 				}
 
-				// Attach Up/Down arrow key navigation for the popup list.
-				// The OneNotePicker library only handles Enter/Tab, so we add arrow key support here.
-				// The listener is attached to the popup element which is removed from the DOM when the
-				// popup closes, so there is no need to explicitly clean it up.
-				// Guard against attaching multiple listeners if onPopupToggle(true) is called more than once.
-				// Use capture so the popup still receives Up/Down events before child controls suppress bubbling.
+				// Attach Up/Down arrow key navigation (OneNotePicker only handles Enter/Tab)
 				if (sectionPickerPopup && !sectionPickerPopup.getAttribute("data-arrow-key-handler-attached")) {
 					sectionPickerPopup.setAttribute("data-arrow-key-handler-attached", "true");
 					sectionPickerPopup.addEventListener("keydown", (e: KeyboardEvent) => {
@@ -99,8 +92,6 @@ export class SectionPickerClass extends ComponentBase<SectionPickerState, Sectio
 							return;
 						}
 						e.preventDefault();
-						// Only include visible items — exclude elements whose parent is inside a "Closed"
-						// collapsed notebook or sectionGroup (children remain in the DOM but are hidden via CSS).
 						let focusableItems = Array.prototype.slice.call(
 							sectionPickerPopup.querySelectorAll("[tabindex]:not([tabindex=\"-1\"])")
 						).filter((el) => {
@@ -302,7 +293,6 @@ export class SectionPickerClass extends ComponentBase<SectionPickerState, Sectio
 	}
 
 	// Attach escape key handler to return focus to the dropdown button when Escape is pressed
-	// This is needed because the OneNotePicker component handles Escape internally without calling onPopupToggle
 	attachEscapeFocusHandler(element: HTMLElement, isInitialized: boolean) {
 		if (!isInitialized) {
 			const escKeyCode = 27;

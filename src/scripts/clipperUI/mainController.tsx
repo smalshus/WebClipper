@@ -101,11 +101,7 @@ export class MainControllerClass extends ComponentBase<MainControllerState, Main
 		}
 	}
 
-	/**
-	 * Handles focus trapping within certain panels to prevent keyboard focus from escaping
-	 * when navigating with Tab key. This ensures accessibility compliance by keeping focus
-	 * within the popup until the user explicitly closes it.
-	 */
+	// Prevents Tab key from moving focus outside the popup 
 	handleFocusTrap(event: KeyboardEvent) {
 		// Only trap focus for specific panels that need it
 		if (this.state.currentPanel !== PanelType.ClippingSuccess &&

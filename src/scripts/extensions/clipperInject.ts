@@ -84,12 +84,7 @@ export class ClipperInject extends FrameInjectBase<ClipperInjectOptions> {
 			this.updateUiSizeAttributes();
 			this.overrideTransformStyles(document.documentElement);
 
-			// The clipper frame is now visible; hide page body from assistive technologies
-			// so that tools like Voice Access do not number background page controls.
-			// The frame is appended to <html> (not <body>), so marking <body aria-hidden>
-			// and inert only hides page content while keeping the clipper iframe accessible.
-			// aria-hidden removes body from the AT tree; inert also disables pointer events
-			// so Voice Access cannot enumerate or activate background controls.
+			// Hide page body from assistive technologies (Voice Access) while clipper is open
 			if (document.body) {
 				document.body.setAttribute("aria-hidden", "true");
 				document.body.setAttribute("inert", "");
