@@ -301,7 +301,6 @@ export class SectionPickerClass extends ComponentBase<SectionPickerState, Sectio
 		};
 	}
 
-	
 	// Attach escape key handler to return focus to the dropdown button when Escape is pressed
 	// This is needed because the OneNotePicker component handles Escape internally without calling onPopupToggle
 	attachEscapeFocusHandler(element: HTMLElement, isInitialized: boolean) {

@@ -44,7 +44,8 @@ export class MainControllerTests extends TestModule {
 			onSignInInvoked={this.mockMainControllerProps.onSignInInvoked}
 			onSignOutInvoked={this.mockMainControllerProps.onSignOutInvoked}
 			updateFrameHeight={this.mockMainControllerProps.updateFrameHeight}
-			onStartClip={this.mockMainControllerProps.onStartClip}/>;
+			onStartClip={this.mockMainControllerProps.onStartClip}
+			clearKeepAlive={this.mockMainControllerProps.clearKeepAlive}/>;
 	}
 
 	protected tests() {
@@ -161,12 +162,12 @@ export class MainControllerTests extends TestModule {
 
 			// Focus on cancel button and tab - should move to close button
 			cancelButton.focus();
-			let tabEvent = new KeyboardEvent("keydown", { keyCode: Constants.KeyCodes.tab, bubbles: true });
+			let tabEvent = new KeyboardEvent("keydown", { keyCode: Constants.KeyCodes.tab, bubbles: true } as any);
 			document.dispatchEvent(tabEvent);
 			strictEqual(document.activeElement, closeButton, "Tab from cancel button should focus close button");
 
 			// Tab again - should wrap to cancel button
-			tabEvent = new KeyboardEvent("keydown", { keyCode: Constants.KeyCodes.tab, bubbles: true });
+			tabEvent = new KeyboardEvent("keydown", { keyCode: Constants.KeyCodes.tab, bubbles: true } as any);
 			document.dispatchEvent(tabEvent);
 			strictEqual(document.activeElement, cancelButton, "Tab from close button should wrap to cancel button");
 		});
@@ -183,12 +184,12 @@ export class MainControllerTests extends TestModule {
 
 			// Focus on launch button and tab - should move to close button
 			launchButton.focus();
-			let tabEvent = new KeyboardEvent("keydown", { keyCode: Constants.KeyCodes.tab, bubbles: true });
+			let tabEvent = new KeyboardEvent("keydown", { keyCode: Constants.KeyCodes.tab, bubbles: true } as any);
 			document.dispatchEvent(tabEvent);
 			strictEqual(document.activeElement, closeButton, "Tab from launch button should focus close button");
 
 			// Tab again - should wrap to launch button
-			tabEvent = new KeyboardEvent("keydown", { keyCode: Constants.KeyCodes.tab, bubbles: true });
+			tabEvent = new KeyboardEvent("keydown", { keyCode: Constants.KeyCodes.tab, bubbles: true } as any);
 			document.dispatchEvent(tabEvent);
 			strictEqual(document.activeElement, launchButton, "Tab from close button should wrap to launch button");
 		});

@@ -194,7 +194,8 @@ gulp.task("tslint", function() {
     var tsFiles = [
         PATHS.SRC.ROOT + "**/*.ts",
         PATHS.SRC.ROOT + "**/*.tsx",
-        "!" + PATHS.SRC.ROOT + "**/*.d.ts"
+        "!" + PATHS.SRC.ROOT + "**/*.d.ts",
+        "!" + PATHS.SRC.ROOT + "scripts/definitions/custom/aria-web-telemetry-*.d_internal.ts"
     ];
 
     return gulp.src(tsFiles)
