@@ -84,6 +84,17 @@ export class ClipperInject extends FrameInjectBase<ClipperInjectOptions> {
 			this.updateUiSizeAttributes();
 			this.overrideTransformStyles(document.documentElement);
 
+			// The clipper frame is now visible; hide page body from assistive technologies
+			// so that tools like Voice Access do not number background page controls.
+			// The frame is appended to <html> (not <body>), so marking <body aria-hidden>
+			// and inert only hides page content while keeping the clipper iframe accessible.
+			// aria-hidden removes body from the AT tree; inert also disables pointer events
+			// so Voice Access cannot enumerate or activate background controls.
+			if (document.body) {
+				document.body.setAttribute("aria-hidden", "true");
+				document.body.setAttribute("inert", "");
+			}
+
 			this.logger = new CommunicatorLoggerPure(this.uiCommunicator);
 
 			this.updatePageInfo();
@@ -316,6 +327,10 @@ export class ClipperInject extends FrameInjectBase<ClipperInjectOptions> {
 
 		this.uiCommunicator.registerFunction(Constants.FunctionKeys.hideUi, () => {
 			this.frame.style.display = "none";
+			if (document.body) {
+				document.body.removeAttribute("aria-hidden");
+				document.body.removeAttribute("inert");
+			}
 		});
 
 		this.uiCommunicator.registerFunction(Constants.FunctionKeys.refreshPage, () => {
@@ -375,6 +390,10 @@ export class ClipperInject extends FrameInjectBase<ClipperInjectOptions> {
 	private toggleClipper() {
 		if (this.frame.style.display === "none") {
 			this.frame.style.display = "";
+			if (document.body) {
+				document.body.setAttribute("aria-hidden", "true");
+				document.body.setAttribute("inert", "");
+			}
 		}
 		this.uiCommunicator.callRemoteFunction(Constants.FunctionKeys.toggleClipper);
 	}

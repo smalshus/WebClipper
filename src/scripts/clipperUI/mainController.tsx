@@ -431,7 +431,8 @@ export class MainControllerClass extends ComponentBase<MainControllerState, Main
 			<div
 				id={Constants.Ids.mainController}
 				{...this.onElementDraw(this.onMainControllerDraw)}
-				role="main"
+				role="dialog"
+				aria-modal="true"
 				aria-label={Localization.getLocalizedString("WebClipper.Label.OneNoteWebClipper")} >
 				{closeButtonToRender}
 				<div className="panelContent">

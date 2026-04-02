@@ -511,6 +511,17 @@ export class MainControllerTests extends TestModule {
 					"The close button should render when the clipper is not clipping to OneNote API");
 			}
 		});
+
+		test("The main controller should have role='dialog' and aria-modal='true' for accessibility", () => {
+			MithrilUtils.mountToFixture(this.defaultComponent);
+
+			let mainController = document.getElementById(Constants.Ids.mainController);
+			ok(mainController, "The main controller element should exist");
+			strictEqual(mainController.getAttribute("role"), "dialog",
+				"The main controller should have role='dialog' to prevent Voice Access from numbering background controls");
+			strictEqual(mainController.getAttribute("aria-modal"), "true",
+				"The main controller should have aria-modal='true' to mark it as a modal dialog");
+		});
 	}
 
 	private getMockRequestError(): OneNoteApi.RequestError {
