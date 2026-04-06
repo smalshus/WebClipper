@@ -54,16 +54,6 @@ export class SectionPickerClass extends ComponentBase<SectionPickerState, Sectio
 			// If the user selects a section, onPopupToggle will fire because it closes the popup, even though it wasn't a click
 			// so logging only when they open it is potentially the next best thing
 			Clipper.logger.logClickEvent(Log.Click.Label.sectionPickerLocationContainer);
-			// Move focus to the first item in the dropdown when it opens
-			requestAnimationFrame(() => {
-				let notebookList = document.getElementById("notebookList");
-				if (notebookList) {
-					let firstTreeItem = notebookList.querySelector("li[role='treeitem']") as HTMLElement;
-					if (firstTreeItem) {
-						firstTreeItem.focus();
-					}
-				}
-			});
 		}
 		this.props.onPopupToggle(shouldNowBeOpen);
 		if (shouldNowBeOpen) {
