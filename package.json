@@ -1,5 +1,5 @@
 {
-    "version": "3.10.12",
+    "version": "3.10.13",
     "name": "webclipper",
     "private": true,
     "description": "The core of the OneNote Web Clipper found at https://www.onenote.com/clipper",
