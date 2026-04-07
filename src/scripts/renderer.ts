@@ -8,8 +8,9 @@ import {Session} from "./logging/submodules/session";
 import {Status} from "./logging/submodules/status";
 
 // Renderer page script - connects to service worker via port
-// and handles scroll/capture commands. Reads HTML directly from
-// chrome.storage.session to avoid large data through message channels.
+// and handles scroll/capture commands. Content HTML read from
+// chrome.storage.session; images sent to worker via chunked port
+// messages at save time (per-port isolation enables multi-window).
 //
 // Content is rendered inside an iframe for CSS isolation — the renderer's
 // own styles (scrollbar hiding, overflow) don't interfere with the page's CSS.
@@ -1251,15 +1252,17 @@ function extractBookmark() {
 
 	let secondTdStyle = thumbnailSrc ? "padding-left:16px;" : "";
 
-	cachedBookmarkHtml = "<table style=\"table-layout:fixed;border-collapse:collapse;margin-bottom:24px;max-width:624px;width:100%;\">"
+	let bmFontStyle = "font-size:16px;font-family:Verdana;";
+	cachedBookmarkHtml = "<div style=\"" + bmFontStyle + "\">"
+		+ "<table style=\"table-layout:auto;border-collapse:collapse;margin-bottom:24px;" + bmFontStyle + "\">"
 		+ "<tr style=\"vertical-align:top;\">"
 		+ thumbHtml
-		+ "<td style=\"" + secondTdStyle + "\"><table style=\"table-layout:fixed;width:100%;\">"
+		+ "<td style=\"" + secondTdStyle + "\"><table style=\"" + bmFontStyle + "\">"
 		+ titleHtml
 		+ "<tr><td style=\"" + urlStyle + "\"><a href=\"" + escapeAttr(pageUrl) + "\" target=\"_blank\" style=\"color:#2e75b5;\">" + escapeHtml(pageUrl) + "</a></td></tr>"
 		+ descHtml
 		+ "</table></td>"
-		+ "</tr></table>";
+		+ "</tr></table></div>";
 
 	bookmarkLoaded = true;
 	renderBookmarkHtml(cachedBookmarkHtml);
@@ -1366,11 +1369,11 @@ function renderRegionThumbnails() {
 			if (regionImages.length === 0) {
 				// No regions left — stay in region mode, show just the add button
 				renderRegionThumbnails();
-				updateRegionSessionStorage();
+
 				saveBtn.disabled = true;
 			} else {
 				renderRegionThumbnails();
-				updateRegionSessionStorage();
+
 			}
 		})(i));
 		thumb.appendChild(img);
@@ -1393,22 +1396,6 @@ function renderRegionThumbnails() {
 	} else {
 		saveBtn.disabled = true;
 	}
-}
-
-function updateRegionSessionStorage() {
-	// Store each region as a separate key to avoid session storage size limits
-	// First clear any old region keys
-	chrome.storage.session.get(null, (all: any) => { // tslint:disable-line:no-null-keyword
-		let keysToRemove = Object.keys(all).filter((k) => k.indexOf("regionImage_") === 0);
-		if (keysToRemove.length > 0) {
-			chrome.storage.session.remove(keysToRemove);
-		}
-		let toSet: any = { regionImageCount: regionImages.length };
-		for (let i = 0; i < regionImages.length; i++) {
-			toSet["regionImage_" + i] = regionImages[i];
-		}
-		chrome.storage.session.set(toSet);
-	});
 }
 
 // --- PDF mode functions ---
@@ -1603,21 +1590,26 @@ function enterPdfMode(url: string) {
 	}
 	pdfAttachWarning.textContent = strings.pdfTooLarge;
 
-	// Hide non-PDF mode buttons, show PDF + bookmark
+	// Hide non-PDF mode buttons, show PDF + bookmark, enable them (they start disabled during capture)
 	document.querySelectorAll(".mode-btn").forEach(function(btn) {
 		let mode = btn.getAttribute("data-mode");
 		if (mode === "pdf") {
 			(btn as HTMLElement).style.display = "";
+			(btn as HTMLButtonElement).disabled = false;
+			btn.classList.remove("disabled");
 			btn.classList.add("selected");
 			btn.setAttribute("aria-pressed", "true");
 		} else if (mode === "bookmark") {
 			(btn as HTMLElement).style.display = "";
+			(btn as HTMLButtonElement).disabled = false;
+			btn.classList.remove("disabled");
 			btn.classList.remove("selected");
 			btn.setAttribute("aria-pressed", "false");
 		} else {
 			(btn as HTMLElement).style.display = "none";
 		}
 	});
+	enableSignout();
 
 	// Show PDF options, hide capture panel
 	pdfOptionsPanel.style.display = "block";
@@ -1843,14 +1835,21 @@ function getPdfFileName(url: string): string {
 }
 
 // Generate bookmark HTML for PDF pages (no og: tags in PDF viewer DOM)
+// Matches the structure and styling of extractBookmark() / legacy bookmarkPreview.tsx
 function generatePdfBookmarkHtml(title: string, url: string): string {
-	let safeTitle = title.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
-	let safeUrl = url.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
-	return "<table style=\"table-layout:fixed;max-width:624px;font-family:Verdana;font-size:16px;\" cellpadding=\"0\" cellspacing=\"0\">"
-		+ "<tr><td style=\"padding:10px;\">"
-		+ "<div style=\"font-size:16px;font-weight:bold;\">" + safeTitle + "</div>"
-		+ "<div style=\"font-size:12px;margin-top:6px;\"><a href=\"" + safeUrl + "\">" + safeUrl + "</a></div>"
-		+ "</td></tr></table>";
+	let safeTitle = escapeHtml(title);
+	let safeUrl = escapeAttr(url);
+	let displayUrl = escapeHtml(url);
+	let fontStyle = "font-size:16px;font-family:Verdana;";
+	let urlStyle = "white-space:nowrap;overflow:hidden;text-overflow:ellipsis;padding:2px;";
+	return "<div style=\"" + fontStyle + "\">"
+		+ "<table style=\"table-layout:auto;border-collapse:collapse;margin-bottom:24px;" + fontStyle + "\">"
+		+ "<tr style=\"vertical-align:top;\">"
+		+ "<td><table style=\"" + fontStyle + "\">"
+		+ "<tr><td><h2 style=\"margin:0;margin-bottom:13px;\">" + safeTitle + "</h2></td></tr>"
+		+ "<tr><td style=\"" + urlStyle + "\"><a href=\"" + safeUrl + "\" target=\"_blank\" style=\"color:#2e75b5;\">" + displayUrl + "</a></td></tr>"
+		+ "</table></td>"
+		+ "</tr></table></div>";
 }
 
 // Mode button click handlers + ARIA (aria-pressed in toolbar, arrow keys)
@@ -2289,14 +2288,13 @@ port.onMessage.addListener((message: any) => {
 			stitchCanvas = trimmed;
 		}
 
-		// Convert to JPEG 95% data URL and store in session storage
+		// Convert to JPEG 95% data URL — kept in page variable (no session storage)
 		stitchCanvas.toBlob(((blob: Blob) => {
 			let reader = new FileReader();
 			reader.onloadend = function() {
 				let dataUrl = reader.result as string;
-				fullPageDataUrl = dataUrl; // Cache for mode switching
-				chrome.storage.session.set({ fullPageFinalImage: dataUrl }, function() {
-					fullPageComplete = true;
+				fullPageDataUrl = dataUrl; // Cache for mode switching and save
+				fullPageComplete = true;
 
 					// Only update left panel if still viewing Full Page mode
 					if (currentMode === "fullpage") {
@@ -2329,7 +2327,6 @@ port.onMessage.addListener((message: any) => {
 					if (fpModeBtn) { setTimeout(function() { fpModeBtn.focus(); }, 100); }
 
 					safeSend({ action: "finalizeComplete" });
-				});
 			};
 			reader.readAsDataURL(blob);
 		}) as BlobCallback, "image/jpeg", 0.95);
@@ -2372,7 +2369,6 @@ port.onMessage.addListener((message: any) => {
 
 			regionImages.push(croppedUrl);
 			renderRegionThumbnails();
-			updateRegionSessionStorage();
 		};
 		fullImg.src = message.dataUrl || "";
 	}
@@ -2683,18 +2679,25 @@ saveBtn.addEventListener("click", () => {
 		sectionId: selectedSectionId
 	};
 	// For full page, send the actual CSS width of the captured image
-	// (contentPixelWidth is physical pixels; divide by DPR for CSS pixels)
 	if (currentMode === "fullpage" && contentPixelWidth > 0 && stitchDpr > 0) {
 		saveMsg.imageWidth = Math.round(contentPixelWidth / stitchDpr);
 	}
-	// For article/bookmark, include the rendered HTML
-	// Wrap article content with font styling (matches old oneNoteSaveableFactory behavior)
-	// If highlights exist, serialize the iframe body to preserve them
-	if (currentMode === "article") {
+
+	// --- Chunked save protocol: send metadata first, then image chunks ---
+	if (currentMode === "fullpage") {
+		saveMsg.saveImageCount = 1;
+		safeSend(saveMsg);
+		safeSend({ action: "saveImage", index: 0, dataUrl: fullPageDataUrl });
+	} else if (currentMode === "region") {
+		saveMsg.saveImageCount = regionImages.length;
+		safeSend(saveMsg);
+		for (let i = 0; i < regionImages.length; i++) {
+			safeSend({ action: "saveImage", index: i, dataUrl: regionImages[i] });
+		}
+	} else if (currentMode === "article") {
 		let pDoc = previewFrame.contentDocument;
 		let articleBody = "";
 		if (pDoc && pDoc.body && pDoc.body.querySelector(".highlighted")) {
-			// Clone body to strip delete buttons without mutating the live preview
 			let clone = pDoc.body.cloneNode(true) as HTMLElement;
 			let delBtns = clone.querySelectorAll(".delete-highlight");
 			for (let i = delBtns.length - 1; i >= 0; i--) {
@@ -2704,12 +2707,15 @@ saveBtn.addEventListener("click", () => {
 		} else {
 			articleBody = cachedArticleHtml;
 		}
-		// Apply font family + size as wrapping div (OneNote tables don't inherit from parent)
 		let fontFamily = articleSerif ? strings.fontFamilySerif : strings.fontFamilySansSerif;
 		let fontStyle = "font-size: " + articleFontSize + "px; font-family: " + fontFamily + ";";
 		saveMsg.contentHtml = "<div style=\"" + fontStyle + "\">" + articleBody + "</div>";
-	} else if (currentMode === "bookmark" && cachedBookmarkHtml) {
-		saveMsg.contentHtml = cachedBookmarkHtml;
+		saveMsg.saveImageCount = 0;
+		safeSend(saveMsg);
+	} else if (currentMode === "bookmark") {
+		saveMsg.contentHtml = cachedBookmarkHtml || "";
+		saveMsg.saveImageCount = 0;
+		safeSend(saveMsg);
 	} else if (currentMode === "pdf") {
 		// Validate page range before saving
 		if (!pdfAllPages && !validatePageRange()) {
@@ -2719,7 +2725,6 @@ saveBtn.addEventListener("click", () => {
 			capturePanel.style.display = "none";
 			return;
 		}
-		// Render selected pages and store in session storage, then send save message
 		let indices = getPdfSelectedIndices();
 		if (indices.length === 0) {
 			unlockSidebar();
@@ -2730,7 +2735,7 @@ saveBtn.addEventListener("click", () => {
 		}
 		statusText.textContent = strings.pdfProgress;
 		announceToScreenReader(strings.pdfProgress);
-		// Extend timeout for large PDFs — 30s base + 5s per page
+		// Extend timeout for large PDFs
 		if (saveTimeoutId) { clearTimeout(saveTimeoutId); }
 		let pdfTimeoutMs = Math.max(30000, indices.length * 5000 + 30000);
 		saveTimeoutId = setTimeout(function() {
@@ -2746,41 +2751,40 @@ saveBtn.addEventListener("click", () => {
 				announceToScreenReader(loc("WebClipper.Error.GenericError", "Something went wrong."));
 			}
 		}, pdfTimeoutMs);
-		// Render all selected pages to data URLs
+		// Render selected pages then send via chunked protocol
 		let renderPromises: Promise<string>[] = [];
 		for (let i = 0; i < indices.length; i++) {
 			renderPromises.push(renderPdfPage(indices[i]));
 		}
+		let wantAttach = pdfAttach && pdfBuffer && pdfByteLength <= pdfMaxAttachSize;
 		Promise.all(renderPromises).then(function(dataUrls) {
-			// Store page images in session storage
-			let storageData: any = { pdfPageImageCount: dataUrls.length };
+			saveMsg.pdfPageCount = dataUrls.length;
+			saveMsg.pdfAttach = !!wantAttach;
+			saveMsg.pdfDistribute = pdfDistribute;
+			saveMsg.pdfAttachName = getPdfFileName(sourceUrl.textContent || pdfSourceUrl);
+			saveMsg.pdfTotalPages = pdfPageCount;
+			saveMsg.pageLabel = strings.page;
+			saveMsg.pdfPageNumbers = indices.map(function(idx) { return idx + 1; });
+			saveMsg.saveImageCount = dataUrls.length;
+			saveMsg.saveAttachment = !!wantAttach;
+			safeSend(saveMsg);
+			// Stream image chunks
 			for (let i = 0; i < dataUrls.length; i++) {
-				storageData["pdfPageImage_" + i] = dataUrls[i];
+				safeSend({ action: "saveImage", index: i, dataUrl: dataUrls[i] });
 			}
-			// If attaching PDF, store raw bytes as base64 data URL
-			if (pdfAttach && pdfBuffer && pdfByteLength <= pdfMaxAttachSize) {
-				// Convert Uint8Array to base64 string
+			// Stream attachment if enabled
+			if (wantAttach) {
 				let binary = "";
 				for (let i = 0; i < pdfBuffer.length; i++) {
 					binary += String.fromCharCode(pdfBuffer[i]);
 				}
-				storageData.pdfAttachmentData = "data:application/pdf;base64," + btoa(binary);
+				safeSend({ action: "saveAttachment", dataUrl: "data:application/pdf;base64," + btoa(binary) });
 			}
-			chrome.storage.session.set(storageData, function() {
-				saveMsg.pdfPageCount = dataUrls.length;
-				saveMsg.pdfAttach = pdfAttach && pdfByteLength <= pdfMaxAttachSize;
-				saveMsg.pdfDistribute = pdfDistribute;
-				saveMsg.pdfAttachName = getPdfFileName(sourceUrl.textContent || pdfSourceUrl);
-				saveMsg.pdfTotalPages = pdfPageCount;
-				saveMsg.pageLabel = strings.page;
-				// Send actual 1-indexed page numbers for title generation (e.g. [2,3,4,7] not [1,2,3,4])
-				saveMsg.pdfPageNumbers = indices.map(function(i) { return i + 1; });
-				safeSend(saveMsg);
-			});
 		});
-		return; // don't send saveMsg below — it's sent in the callback
+	} else {
+		saveMsg.saveImageCount = 0;
+		safeSend(saveMsg);
 	}
-	safeSend(saveMsg);
 });
 
 // Block keyboard on non-interactive elements — but allow keys needed by screen readers
