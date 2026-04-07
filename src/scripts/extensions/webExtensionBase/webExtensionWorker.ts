@@ -329,11 +329,49 @@ export class WebExtensionWorker extends ExtensionWorkerBase<W3CTab, number> {
 
 		// If signed in, inject content capture script immediately (runs in parallel with window opening)
 		if (signedIn) {
-			chrome.runtime.onMessage.addListener(captureListener);
-			WebExtension.browser.scripting.executeScript({
-				target: { tabId: this.tab.id },
-				files: ["contentCaptureInject.js"]
-			});
+			// Check local file permission before injecting — file:/// tabs need explicit permission
+			let isLocalFile = this.tab.url && this.tab.url.indexOf("file:///") === 0;
+			let sendLocalFileNotAllowed = () => {
+				let tabUrl = this.tab.url || "";
+				let isPdf = /\.pdf$/i.test(tabUrl);
+				chrome.storage.session.set({
+					fullPageContentType: isPdf ? "pdf" : "html",
+					fullPageTitle: this.tab.title || "",
+					fullPageUrl: tabUrl
+				}, () => {
+					contentCaptured = true;
+					if (activePort) {
+						activePort.postMessage({ action: "loadContent", localFileNotAllowed: true });
+					}
+				});
+			};
+			if (isLocalFile) {
+				// Try injecting — catch both sync throws and async promise rejections
+				// (MV3 scripting.executeScript returns a Promise that rejects if blocked)
+				chrome.runtime.onMessage.addListener(captureListener);
+				try {
+					let injectPromise = WebExtension.browser.scripting.executeScript({
+						target: { tabId: this.tab.id as number },
+						files: ["contentCaptureInject.js"]
+					});
+					// Handle promise rejection (MV3 "Blocked" error on file:// without permission)
+					if (injectPromise && injectPromise.catch) {
+						injectPromise.catch(function() {
+							chrome.runtime.onMessage.removeListener(captureListener);
+							sendLocalFileNotAllowed();
+						});
+					}
+				} catch (e) {
+					chrome.runtime.onMessage.removeListener(captureListener);
+					sendLocalFileNotAllowed();
+				}
+			} else {
+				chrome.runtime.onMessage.addListener(captureListener);
+				WebExtension.browser.scripting.executeScript({
+					target: { tabId: this.tab.id as number },
+					files: ["contentCaptureInject.js"]
+				});
+			}
 		}
 
 		WebExtension.browser.windows.getCurrent((currentWindow: chrome.windows.Window) => {

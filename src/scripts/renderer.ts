@@ -1729,6 +1729,7 @@ function loadPdf(url: string) {
 	let isLocal = url.indexOf("file:///") === 0;
 
 	let processPdf = function(source: any, byteLen?: number) {
+		// PDFJS.getDocument returns a PDFDocumentLoadingTask with .then(ok, err) but no .catch
 		(window as any).PDFJS.getDocument(source).then(function(pdf: any) {
 			pdfDoc = pdf;
 			pdfPageCount = pdf.numPages;
@@ -1755,10 +1756,18 @@ function loadPdf(url: string) {
 			setupPdfPreviewLazyLoad();
 
 			announceToScreenReader(strings.modePdf + " — " + pdfPageCount + " " + strings.page + (pdfPageCount !== 1 ? "s" : ""));
+		}, function(err: any) {
+			if (isLocal) {
+				showLocalPdfBlockedPanel();
+			} else {
+				showPdfError("Failed to load PDF: " + (err.message || "Unknown error"));
+				saveBtn.disabled = true;
+			}
 		});
 	};
 
 	if (isLocal) {
+		// Pass file:// URL directly to PDFJS — works if extension has file access permission
 		processPdf(url);
 	} else {
 		fetch(url).then(function(response) {
@@ -1787,6 +1796,28 @@ function updateAttachCheckbox() {
 		pdfAttachLabel.classList.add("disabled");
 		pdfAttachWarning.style.display = "";
 	}
+}
+
+// Show local file permission panel in preview area (used by both worker-blocked and PDFJS-blocked paths)
+function showLocalPdfBlockedPanel() {
+	let loadEl = document.getElementById("pdf-initial-loading");
+	if (loadEl && loadEl.parentNode) { loadEl.parentNode.removeChild(loadEl); }
+	let panel = document.createElement("div");
+	panel.setAttribute("role", "alert");
+	panel.style.cssText = "padding:32px 24px;text-align:center;color:#444;font-family:Segoe UI,sans-serif;";
+	let title = document.createElement("div");
+	title.style.cssText = "font-size:15px;font-weight:600;margin-bottom:12px;color:#333;";
+	title.textContent = loc("WebClipper.ClipType.Pdf.AskPermissionToClipLocalFile",
+		"We need your permission to clip PDF files stored on your computer");
+	let instructions = document.createElement("div");
+	instructions.style.cssText = "font-size:13px;line-height:1.6;color:#555;";
+	instructions.textContent = loc("WebClipper.ClipType.Pdf.InstructionsForClippingLocalFiles",
+		"Right-click the OneNote Web Clipper icon in the toolbar and choose \"Manage Extension\". Then enable \"Allow access to file URLs.\"");
+	panel.appendChild(title);
+	panel.appendChild(instructions);
+	previewContainer.appendChild(panel);
+	saveBtn.disabled = true;
+	announceToScreenReader(title.textContent);
 }
 
 function showPdfError(msg: string) {
@@ -1892,6 +1923,14 @@ port.onMessage.addListener((message: any) => {
 			if (stored && stored.fullPageTitle && !titleField.value) { titleField.value = stored.fullPageTitle; }
 			if (stored && stored.fullPageUrl && !sourceUrl.textContent) { sourceUrl.textContent = stored.fullPageUrl; sourceUrl.title = stored.fullPageUrl; }
 			if (stored && stored.fullPageTitle) { originalTitle = stored.fullPageTitle; }
+
+			// Local file not allowed — show helpful permission message in preview area
+			// Flag comes via port message (not session storage) to avoid cross-session leaks
+			if (message.localFileNotAllowed) {
+				enterPdfMode(stored.fullPageUrl || "");
+				showLocalPdfBlockedPanel();
+				return;
+			}
 
 			// PDF content type — enter PDF mode instead of normal capture flow
 			if (stored && stored.fullPageContentType === "pdf") {
