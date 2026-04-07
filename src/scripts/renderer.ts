@@ -1339,6 +1339,7 @@ function switchToRegion() {
 	iframe.style.display = "none";
 	previewFrame.style.display = "none";
 	articleHeader.style.display = "none";
+	if (pdfOptionsPanel) { pdfOptionsPanel.style.display = "none"; }
 	// Keep previewContainer visible (even if empty) so sidebar stays right in flex layout
 	previewContainer.innerHTML = "";
 	previewContainer.style.display = "block";
@@ -1543,6 +1544,16 @@ function switchToPdf() {
 	let banner = document.getElementById("success-banner");
 	if (banner) { banner.style.display = "none"; }
 	saveDone = false;
+	// Re-render PDF pages (preview-container may have region thumbnails from region mode)
+	if (pdfDoc) {
+		previewContainer.innerHTML = "";
+		pdfPagesRendered = new Array(pdfPageCount);
+		renderPdfPagesInPreview(0, pdfInitialPageLoad);
+		setupPdfPreviewLazyLoad();
+		updatePdfPageSelection();
+	}
+	saveBtn.disabled = !pdfDoc;
+	saveBtn.textContent = strings.saveToOneNote;
 }
 
 function enterPdfMode(url: string) {
@@ -1590,7 +1601,7 @@ function enterPdfMode(url: string) {
 	}
 	pdfAttachWarning.textContent = strings.pdfTooLarge;
 
-	// Hide non-PDF mode buttons, show PDF + bookmark, enable them (they start disabled during capture)
+	// Hide non-PDF mode buttons, show PDF + Region + Bookmark, enable them (they start disabled during capture)
 	document.querySelectorAll(".mode-btn").forEach(function(btn) {
 		let mode = btn.getAttribute("data-mode");
 		if (mode === "pdf") {
@@ -1599,7 +1610,7 @@ function enterPdfMode(url: string) {
 			btn.classList.remove("disabled");
 			btn.classList.add("selected");
 			btn.setAttribute("aria-pressed", "true");
-		} else if (mode === "bookmark") {
+		} else if (mode === "region" || mode === "bookmark") {
 			(btn as HTMLElement).style.display = "";
 			(btn as HTMLButtonElement).disabled = false;
 			btn.classList.remove("disabled");
