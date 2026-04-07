@@ -56,6 +56,53 @@ export class SectionPickerClass extends ComponentBase<SectionPickerState, Sectio
 			Clipper.logger.logClickEvent(Log.Click.Label.sectionPickerLocationContainer);
 		}
 		this.props.onPopupToggle(shouldNowBeOpen);
+		if (shouldNowBeOpen) {
+			// Focus the selected section and attach arrow key navigation for keyboard users
+			setTimeout(() => {
+				let sectionPickerPopup = document.getElementById("sectionPickerContainer");
+
+				let curSectionId = this.state.curSection && this.state.curSection.section ? this.state.curSection.section.id : undefined;
+				let elementToFocus: HTMLElement;
+				if (curSectionId) {
+					elementToFocus = document.getElementById(curSectionId) as HTMLElement;
+				}
+				if (!elementToFocus && sectionPickerPopup) {
+					// Fall back to the first keyboard-navigable item in the section picker popup
+					elementToFocus = sectionPickerPopup.querySelector("[tabindex]:not([tabindex=\"-1\"])") as HTMLElement;
+				}
+				if (elementToFocus) {
+					elementToFocus.focus();
+				}
+
+				// Attach Up/Down arrow key navigation (OneNotePicker only handles Enter/Tab)
+				if (sectionPickerPopup && !sectionPickerPopup.getAttribute("data-arrow-key-handler-attached")) {
+					sectionPickerPopup.setAttribute("data-arrow-key-handler-attached", "true");
+					sectionPickerPopup.addEventListener("keydown", (e: KeyboardEvent) => {
+						if (e.which !== Constants.KeyCodes.up && e.which !== Constants.KeyCodes.down) {
+							return;
+						}
+						e.preventDefault();
+						let focusableItems = Array.prototype.slice.call(
+							sectionPickerPopup.querySelectorAll("[tabindex]:not([tabindex=\"-1\"])")
+						).filter((el) => {
+							let parent = (el as HTMLElement).parentElement;
+							return !parent || !parent.closest(".Closed");
+						}) as HTMLElement[];
+						if (focusableItems.length === 0) {
+							return;
+						}
+						let currentIndex = focusableItems.indexOf(document.activeElement as HTMLElement);
+						if (e.which === Constants.KeyCodes.up) {
+							let prevIndex = currentIndex <= 0 ? 0 : currentIndex - 1;
+							focusableItems[prevIndex].focus();
+						} else {
+							let nextIndex = currentIndex >= focusableItems.length - 1 ? focusableItems.length - 1 : currentIndex + 1;
+							focusableItems[nextIndex].focus();
+						}
+					}, true);
+				}
+			}, 0);
+		}
 	}
 
 	// Returns true if successful; false otherwise
@@ -235,6 +282,30 @@ export class SectionPickerClass extends ComponentBase<SectionPickerState, Sectio
 		};
 	}
 
+	// Attach escape key handler to return focus to the dropdown button when Escape is pressed
+	attachEscapeFocusHandler(element: HTMLElement, isInitialized: boolean) {
+		if (!isInitialized) {
+			const escKeyCode = 27;
+			const handleKeyDown = (ev: KeyboardEvent) => {
+				if (ev.keyCode === escKeyCode) {
+					// Check if the dropdown popup is currently visible
+					let sectionPickerPopup = document.querySelector(".SectionPickerPopup");
+					if (sectionPickerPopup) {
+						// The popup is open - schedule focus return after it closes
+						setTimeout(() => {
+							let locationButton = document.getElementById(Constants.Ids.sectionLocationContainer);
+							if (locationButton) {
+								locationButton.focus();
+							}
+						}, 10);
+					}
+				}
+			};
+			// Use capture phase to run before OneNotePicker's handler
+			document.addEventListener("keydown", handleKeyDown, true);
+		}
+	}
+
 	addSrOnlyLocationDiv(element: HTMLElement) {
 		const pickerLinkElement = document.getElementById(Constants.Ids.sectionLocationContainer);
 		if (!pickerLinkElement) {
@@ -246,6 +317,9 @@ export class SectionPickerClass extends ComponentBase<SectionPickerState, Sectio
 		srDiv.setAttribute("class", Constants.Classes.srOnly);
 		// Make srDiv the first child of pickerLinkElement
 		pickerLinkElement.insertBefore(srDiv, pickerLinkElement.firstChild);
+
+		// Attach escape key handler to return focus to the dropdown button
+		this.attachEscapeFocusHandler(element, false);
 	}
 
 	render() {
@@ -296,10 +370,10 @@ export class SectionPickerClass extends ComponentBase<SectionPickerState, Sectio
 
 		return (
 			<div id={Constants.Ids.locationPickerContainer} {...this.onElementFirstDraw(this.addSrOnlyLocationDiv)}>
-				<div id={Constants.Ids.optionLabel} className="optionLabel">
-					<label htmlFor={Constants.Ids.sectionLocationContainer} aria-label={locationString} className="buttonLabelFont" style={Localization.getFontFamilyAsStyle(Localization.FontFamily.Regular)}>
-						<span aria-hidden="true">{locationString}</span>
-					</label>
+				<div id={Constants.Ids.optionLabel} className="optionLabel" aria-hidden="true">
+					<span className="buttonLabelFont" style={Localization.getFontFamilyAsStyle(Localization.FontFamily.Regular)}>
+						{locationString}
+					</span>
 				</div>
 				<OneNotePicker.OneNotePickerComponent
 					id={Constants.Ids.sectionLocationContainer}

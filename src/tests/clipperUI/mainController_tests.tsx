@@ -44,7 +44,8 @@ export class MainControllerTests extends TestModule {
 			onSignInInvoked={this.mockMainControllerProps.onSignInInvoked}
 			onSignOutInvoked={this.mockMainControllerProps.onSignOutInvoked}
 			updateFrameHeight={this.mockMainControllerProps.updateFrameHeight}
-			onStartClip={this.mockMainControllerProps.onStartClip}/>;
+			onStartClip={this.mockMainControllerProps.onStartClip}
+			clearKeepAlive={this.mockMainControllerProps.clearKeepAlive}/>;
 	}
 
 	protected tests() {
@@ -147,6 +148,50 @@ export class MainControllerTests extends TestModule {
 				dialogButtons.push(dialogButtonContainer.firstChild);
 			}
 			Assert.equalTabIndexes(dialogButtons);
+		});
+
+		test("On the region instructions panel, focus traps between cancel button and close button on Tab", () => {
+			let controllerInstance = MithrilUtils.mountToFixture(this.defaultComponent);
+
+			MithrilUtils.simulateAction(() => {
+				controllerInstance.state.currentPanel = PanelType.RegionInstructions;
+			});
+
+			let cancelButton = document.getElementById(Constants.Ids.regionClipCancelButton);
+			let closeButton = document.getElementById(Constants.Ids.closeButton);
+
+			// Focus on cancel button and tab - should move to close button
+			cancelButton.focus();
+			let tabEvent = new KeyboardEvent("keydown", { keyCode: Constants.KeyCodes.tab, bubbles: true } as any);
+			document.dispatchEvent(tabEvent);
+			strictEqual(document.activeElement, closeButton, "Tab from cancel button should focus close button");
+
+			// Tab again - should wrap to cancel button
+			tabEvent = new KeyboardEvent("keydown", { keyCode: Constants.KeyCodes.tab, bubbles: true } as any);
+			document.dispatchEvent(tabEvent);
+			strictEqual(document.activeElement, cancelButton, "Tab from close button should wrap to cancel button");
+		});
+
+		test("On the success panel, focus traps between launch button and close button on Tab", () => {
+			let controllerInstance = MithrilUtils.mountToFixture(this.defaultComponent);
+
+			MithrilUtils.simulateAction(() => {
+				controllerInstance.state.currentPanel = PanelType.ClippingSuccess;
+			});
+
+			let launchButton = document.getElementById(Constants.Ids.launchOneNoteButton);
+			let closeButton = document.getElementById(Constants.Ids.closeButton);
+
+			// Focus on launch button and tab - should move to close button
+			launchButton.focus();
+			let tabEvent = new KeyboardEvent("keydown", { keyCode: Constants.KeyCodes.tab, bubbles: true } as any);
+			document.dispatchEvent(tabEvent);
+			strictEqual(document.activeElement, closeButton, "Tab from launch button should focus close button");
+
+			// Tab again - should wrap to launch button
+			tabEvent = new KeyboardEvent("keydown", { keyCode: Constants.KeyCodes.tab, bubbles: true } as any);
+			document.dispatchEvent(tabEvent);
+			strictEqual(document.activeElement, launchButton, "Tab from close button should wrap to launch button");
 		});
 
 		test("On the clip failure panel, the right message is displayed for a particular API error code", () => {
@@ -466,6 +511,17 @@ export class MainControllerTests extends TestModule {
 				ok(document.getElementById(Constants.Ids.closeButton),
 					"The close button should render when the clipper is not clipping to OneNote API");
 			}
+		});
+
+		test("The main controller should have role='dialog' and aria-modal='true' for accessibility", () => {
+			MithrilUtils.mountToFixture(this.defaultComponent);
+
+			let mainController = document.getElementById(Constants.Ids.mainController);
+			ok(mainController, "The main controller element should exist");
+			strictEqual(mainController.getAttribute("role"), "dialog",
+				"The main controller should have role='dialog' to prevent Voice Access from numbering background controls");
+			strictEqual(mainController.getAttribute("aria-modal"), "true",
+				"The main controller should have aria-modal='true' to mark it as a modal dialog");
 		});
 	}
 

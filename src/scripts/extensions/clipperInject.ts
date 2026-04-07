@@ -84,6 +84,12 @@ export class ClipperInject extends FrameInjectBase<ClipperInjectOptions> {
 			this.updateUiSizeAttributes();
 			this.overrideTransformStyles(document.documentElement);
 
+			// Hide page body from assistive technologies (Voice Access) while clipper is open
+			if (document.body) {
+				document.body.setAttribute("aria-hidden", "true");
+				document.body.setAttribute("inert", "");
+			}
+
 			this.logger = new CommunicatorLoggerPure(this.uiCommunicator);
 
 			this.updatePageInfo();
@@ -316,6 +322,10 @@ export class ClipperInject extends FrameInjectBase<ClipperInjectOptions> {
 
 		this.uiCommunicator.registerFunction(Constants.FunctionKeys.hideUi, () => {
 			this.frame.style.display = "none";
+			if (document.body) {
+				document.body.removeAttribute("aria-hidden");
+				document.body.removeAttribute("inert");
+			}
 		});
 
 		this.uiCommunicator.registerFunction(Constants.FunctionKeys.refreshPage, () => {
@@ -375,6 +385,10 @@ export class ClipperInject extends FrameInjectBase<ClipperInjectOptions> {
 	private toggleClipper() {
 		if (this.frame.style.display === "none") {
 			this.frame.style.display = "";
+			if (document.body) {
+				document.body.setAttribute("aria-hidden", "true");
+				document.body.setAttribute("inert", "");
+			}
 		}
 		this.uiCommunicator.callRemoteFunction(Constants.FunctionKeys.toggleClipper);
 	}

@@ -272,6 +272,243 @@ export class SectionPickerTests extends TestModule {
 			let actual = SectionPickerClass.formatSectionInfoForStorage([]);
 			strictEqual(actual, undefined, "The section info should be formatted correctly");
 		});
+
+		test("onPopupToggle should focus the currently selected section element when the popup opens and a curSection is set", (assert: QUnitAssert) => {
+			let done = assert.async();
+			let clock = sinon.useFakeTimers();
+
+			let clipperState = MockProps.getMockClipperState();
+			let mockNotebooks = MockProps.getMockNotebooks();
+			let mockSection = {
+				section: mockNotebooks[0].sections[0],
+				path: "Clipper Test > Full Page",
+				parentId: mockNotebooks[0].id
+			};
+			initializeClipperStorage(JSON.stringify(mockNotebooks), JSON.stringify(mockSection));
+
+			let component = <SectionPicker onPopupToggle={() => {}} clipperState={clipperState} />;
+			let controllerInstance = MithrilUtils.mountToFixture(component);
+
+			// Create a fake section element in the DOM that matches the selected section id
+			let sectionElement = document.createElement("li");
+			sectionElement.id = mockSection.section.id;
+			sectionElement.tabIndex = 70;
+			let focusCalled = false;
+			sectionElement.focus = () => { focusCalled = true; };
+			document.body.appendChild(sectionElement);
+
+			controllerInstance.onPopupToggle(true);
+			clock.tick(0);
+
+			ok(focusCalled, "The selected section element should have been focused when the popup opens");
+
+			document.body.removeChild(sectionElement);
+			clock.restore();
+			done();
+		});
+
+		test("onPopupToggle should focus the first focusable item in the picker popup when the popup opens and no curSection is set", (assert: QUnitAssert) => {
+			let done = assert.async();
+			let clock = sinon.useFakeTimers();
+
+			let clipperState = MockProps.getMockClipperState();
+			initializeClipperStorage(undefined, undefined);
+
+			let component = <SectionPicker onPopupToggle={() => {}} clipperState={clipperState} />;
+			let controllerInstance = MithrilUtils.mountToFixture(component);
+
+			// Create a fake popup container and a focusable item inside it
+			let sectionPickerPopup = document.createElement("div");
+			sectionPickerPopup.id = "sectionPickerContainer";
+			let firstItem = document.createElement("li");
+			firstItem.tabIndex = 70;
+			let focusCalled = false;
+			firstItem.focus = () => { focusCalled = true; };
+			sectionPickerPopup.appendChild(firstItem);
+			document.body.appendChild(sectionPickerPopup);
+
+			controllerInstance.onPopupToggle(true);
+			clock.tick(0);
+
+			ok(focusCalled, "The first focusable item in the picker popup should have been focused when no section is selected");
+
+			document.body.removeChild(sectionPickerPopup);
+			clock.restore();
+			done();
+		});
+
+		test("onPopupToggle should not change focus when the popup closes", (assert: QUnitAssert) => {
+			let done = assert.async();
+			let clock = sinon.useFakeTimers();
+
+			let clipperState = MockProps.getMockClipperState();
+			let mockNotebooks = MockProps.getMockNotebooks();
+			let mockSection = {
+				section: mockNotebooks[0].sections[0],
+				path: "Clipper Test > Full Page",
+				parentId: mockNotebooks[0].id
+			};
+			initializeClipperStorage(JSON.stringify(mockNotebooks), JSON.stringify(mockSection));
+
+			let component = <SectionPicker onPopupToggle={() => {}} clipperState={clipperState} />;
+			let controllerInstance = MithrilUtils.mountToFixture(component);
+
+			// Create a fake section element to catch any unexpected focus calls
+			let sectionElement = document.createElement("li");
+			sectionElement.id = mockSection.section.id;
+			sectionElement.tabIndex = 70;
+			let focusCalled = false;
+			sectionElement.focus = () => { focusCalled = true; };
+			document.body.appendChild(sectionElement);
+
+			controllerInstance.onPopupToggle(false);
+			clock.tick(0);
+
+			ok(!focusCalled, "No focus change should occur when the popup closes");
+
+			document.body.removeChild(sectionElement);
+			clock.restore();
+			done();
+		});
+
+		test("onPopupToggle should enable Down arrow key to move focus to the next item in the popup", (assert: QUnitAssert) => {
+			let done = assert.async();
+			let clock = sinon.useFakeTimers();
+
+			let clipperState = MockProps.getMockClipperState();
+			initializeClipperStorage(undefined, undefined);
+
+			let component = <SectionPicker onPopupToggle={() => {}} clipperState={clipperState} />;
+			let controllerInstance = MithrilUtils.mountToFixture(component);
+
+			// Create a fake popup with two items
+			let sectionPickerPopup = document.createElement("div");
+			sectionPickerPopup.id = "sectionPickerContainer";
+			let firstItem = document.createElement("li");
+			firstItem.tabIndex = 70;
+			let secondItemFocusCalled = false;
+			let secondItem = document.createElement("li");
+			secondItem.tabIndex = 70;
+			secondItem.focus = () => { secondItemFocusCalled = true; };
+			sectionPickerPopup.appendChild(firstItem);
+			sectionPickerPopup.appendChild(secondItem);
+			document.body.appendChild(sectionPickerPopup);
+
+			controllerInstance.onPopupToggle(true);
+			clock.tick(0);
+
+			// Simulate focus on first item and press Down arrow
+			firstItem.focus();
+			let downKeyEvent = document.createEvent("KeyboardEvent");
+			downKeyEvent.initEvent("keydown", true, true);
+			Object.defineProperty(downKeyEvent, "which", { value: 40 });
+			sectionPickerPopup.dispatchEvent(downKeyEvent);
+
+			ok(secondItemFocusCalled, "Down arrow key should move focus to the next item in the popup");
+
+			document.body.removeChild(sectionPickerPopup);
+			clock.restore();
+			done();
+		});
+
+		test("onPopupToggle should enable Up arrow key to move focus to the previous item in the popup", (assert: QUnitAssert) => {
+			let done = assert.async();
+			let clock = sinon.useFakeTimers();
+
+			let clipperState = MockProps.getMockClipperState();
+			initializeClipperStorage(undefined, undefined);
+
+			let component = <SectionPicker onPopupToggle={() => {}} clipperState={clipperState} />;
+			let controllerInstance = MithrilUtils.mountToFixture(component);
+
+			// Create a fake popup with two items
+			let sectionPickerPopup = document.createElement("div");
+			sectionPickerPopup.id = "sectionPickerContainer";
+			let firstItemFocusCalled = false;
+			let firstItem = document.createElement("li");
+			firstItem.tabIndex = 70;
+			firstItem.focus = () => { firstItemFocusCalled = true; };
+			let secondItem = document.createElement("li");
+			secondItem.tabIndex = 70;
+			sectionPickerPopup.appendChild(firstItem);
+			sectionPickerPopup.appendChild(secondItem);
+			document.body.appendChild(sectionPickerPopup);
+
+			controllerInstance.onPopupToggle(true);
+			clock.tick(0);
+
+			// Simulate focus on second item and press Up arrow
+			secondItem.focus();
+			let upKeyEvent = document.createEvent("KeyboardEvent");
+			upKeyEvent.initEvent("keydown", true, true);
+			Object.defineProperty(upKeyEvent, "which", { value: 38 });
+			sectionPickerPopup.dispatchEvent(upKeyEvent);
+
+			ok(firstItemFocusCalled, "Up arrow key should move focus to the previous item in the popup");
+
+			document.body.removeChild(sectionPickerPopup);
+			clock.restore();
+			done();
+		});
+
+		test("onPopupToggle should skip hidden items inside closed notebooks when navigating with Down arrow", (assert: QUnitAssert) => {
+			let done = assert.async();
+			let clock = sinon.useFakeTimers();
+
+			let clipperState = MockProps.getMockClipperState();
+			initializeClipperStorage(undefined, undefined);
+
+			let component = <SectionPicker onPopupToggle={() => {}} clipperState={clipperState} />;
+			let controllerInstance = MithrilUtils.mountToFixture(component);
+
+			// Build a structure that mirrors the OneNotePicker DOM:
+			//   sectionPickerContainer
+			//     li.Notebook.Closed (notebook1, tabindex)
+			//       ul
+			//         li.Section (hiddenSection, tabindex) -- inside closed notebook
+			//     li.Notebook.Opened (notebook2, tabindex)
+			let sectionPickerPopup = document.createElement("div");
+			sectionPickerPopup.id = "sectionPickerContainer";
+
+			let notebook1 = document.createElement("li");
+			notebook1.className = "Notebook Closed";
+			notebook1.tabIndex = 70;
+			let closedChildList = document.createElement("ul");
+			let hiddenSection = document.createElement("li");
+			hiddenSection.className = "Section";
+			hiddenSection.tabIndex = 70;
+			let hiddenSectionFocusCalled = false;
+			hiddenSection.focus = () => { hiddenSectionFocusCalled = true; };
+			closedChildList.appendChild(hiddenSection);
+			notebook1.appendChild(closedChildList);
+
+			let notebook2FocusCalled = false;
+			let notebook2 = document.createElement("li");
+			notebook2.className = "Notebook Opened";
+			notebook2.tabIndex = 70;
+			notebook2.focus = () => { notebook2FocusCalled = true; };
+
+			sectionPickerPopup.appendChild(notebook1);
+			sectionPickerPopup.appendChild(notebook2);
+			document.body.appendChild(sectionPickerPopup);
+
+			controllerInstance.onPopupToggle(true);
+			clock.tick(0);
+
+			// Press Down arrow from notebook1 — should jump to notebook2, skipping the hidden section inside notebook1
+			notebook1.focus();
+			let downKeyEvent = document.createEvent("KeyboardEvent");
+			downKeyEvent.initEvent("keydown", true, true);
+			Object.defineProperty(downKeyEvent, "which", { value: 40 });
+			sectionPickerPopup.dispatchEvent(downKeyEvent);
+
+			ok(!hiddenSectionFocusCalled, "Hidden section inside a closed notebook should not receive focus");
+			ok(notebook2FocusCalled, "Down arrow from a closed notebook should move focus to the next visible notebook");
+
+			document.body.removeChild(sectionPickerPopup);
+			clock.restore();
+			done();
+		});
 	}
 }
 
