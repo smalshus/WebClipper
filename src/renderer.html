@@ -6,7 +6,7 @@
 <link rel="stylesheet" href="renderer.css">
 </head>
 <body>
-<div id="signin-overlay" style="display:none;" role="dialog" aria-label="Sign in">
+<div id="signin-overlay" style="display:none;" role="dialog" aria-modal="true" aria-label="Sign in">
 	<div id="signin-panel">
 		<img src="images/onenote_logo_clipper.png" alt="OneNote" class="signin-logo">
 		<h2 class="signin-title">OneNote Web Clipper</h2>
@@ -43,57 +43,61 @@
 </div>
 <div id="sidebar" role="main" aria-label="OneNote Web Clipper">
 	<div id="sidebar-header">
-		<img src="images/onenote_logo_clipper_small.png" alt="">
+		<img src="images/onenote_logo_clipper.png" alt="">
 		<span class="title" id="sidebar-title">OneNote Web Clipper</span>
 	</div>
 	<div id="sidebar-body">
-		<div id="mode-panel" role="toolbar" aria-label="Clipping mode">
-			<button class="mode-btn selected" data-mode="fullpage" aria-pressed="true">
-				<img src="images/fullpage.svg" alt=""><span>Full Page</span>
-			</button>
-			<button class="mode-btn" data-mode="article" aria-pressed="false">
-				<img src="images/article.svg" alt=""><span>Article</span>
-			</button>
-			<button class="mode-btn" data-mode="bookmark" aria-pressed="false">
-				<img src="images/bookmark.svg" alt=""><span>Bookmark</span>
-			</button>
-			<button class="mode-btn" data-mode="region" aria-pressed="false">
-				<img src="images/region.svg" alt=""><span>Region</span>
-			</button>
-			<button class="mode-btn" data-mode="pdf" aria-pressed="false" style="display:none;">
-				<img src="images/pdf.png" alt=""><span>PDF</span>
-			</button>
-		</div>
-		<div id="pdf-options" style="display:none;" role="group" aria-label="PDF options">
-			<div id="pdf-page-selection" role="radiogroup" aria-label="Page selection">
-				<label class="pdf-radio-label">
-					<input type="radio" name="pdf-pages" value="all" checked aria-checked="true"> <span>All pages</span>
-				</label>
-				<label class="pdf-radio-label">
-					<input type="radio" name="pdf-pages" value="range" aria-checked="false"> <span>Page range</span>
-					<input type="text" id="pdf-range-input" class="pdf-range-input" placeholder="e.g. 1-5, 7, 9-12" disabled aria-label="Page range">
-				</label>
-				<div id="pdf-range-error" class="pdf-range-error" role="alert" style="display:none;"></div>
+		<div id="mode-group" class="sidebar-group">
+			<label class="field-label" id="mode-label">What do you want to capture?</label>
+			<div id="mode-panel" role="toolbar" aria-label="Clipping mode">
+				<button class="mode-btn selected" data-mode="fullpage" aria-pressed="true">
+					<img src="images/fullpage.svg" alt=""><span>Full Page</span>
+				</button>
+				<button class="mode-btn" data-mode="article" aria-pressed="false">
+					<img src="images/article.svg" alt=""><span>Article</span>
+				</button>
+				<button class="mode-btn" data-mode="bookmark" aria-pressed="false">
+					<img src="images/bookmark.svg" alt=""><span>Bookmark</span>
+				</button>
+				<button class="mode-btn" data-mode="region" aria-pressed="false">
+					<img src="images/region.svg" alt=""><span>Region</span>
+				</button>
+				<button class="mode-btn" data-mode="pdf" aria-pressed="false" style="display:none;">
+					<img src="images/pdf.png" alt=""><span>PDF</span>
+				</button>
 			</div>
-			<div id="pdf-checkboxes">
-				<label class="pdf-checkbox-label" id="pdf-attach-label">
-					<input type="checkbox" id="pdf-attach-checkbox" checked> <span>Attach PDF file</span>
-					<span class="pdf-checkbox-subtext">(all pages)</span>
-				</label>
-				<div id="pdf-attach-warning" class="pdf-attach-warning" style="display:none;" role="status">PDF too large to attach</div>
-				<label class="pdf-checkbox-label">
-					<input type="checkbox" id="pdf-distribute-checkbox"> <span>New note for each PDF page</span>
-				</label>
+			<div id="pdf-options" style="display:none;" role="group" aria-label="PDF options">
+				<div id="pdf-page-selection" role="radiogroup" aria-label="Page selection">
+					<label class="pdf-radio-label">
+						<input type="radio" name="pdf-pages" value="all" checked> <span>All pages</span>
+					</label>
+					<label class="pdf-radio-label">
+						<input type="radio" name="pdf-pages" value="range"> <span>Page range</span>
+						<input type="text" id="pdf-range-input" class="pdf-range-input" placeholder="e.g. 1-5, 7, 9-12" readonly aria-label="Page range">
+					</label>
+					<div id="pdf-range-error" class="pdf-range-error" role="alert" style="display:none;"></div>
+				</div>
+				<div id="pdf-checkboxes">
+					<label class="pdf-checkbox-label" id="pdf-attach-label">
+						<input type="checkbox" id="pdf-attach-checkbox" checked> <span>Attach PDF file</span>
+						<span class="pdf-checkbox-subtext">(all pages)</span>
+					</label>
+					<div id="pdf-attach-warning" class="pdf-attach-warning" style="display:none;" role="status">PDF too large to attach</div>
+					<label class="pdf-checkbox-label">
+						<input type="checkbox" id="pdf-distribute-checkbox"> <span>New note for each PDF page</span>
+					</label>
+				</div>
 			</div>
 		</div>
-		<hr class="sidebar-divider">
-		<div id="meta-panel">
+		<div id="meta-group" class="sidebar-group">
 			<label class="field-label" id="title-label" for="title-field">Title</label>
 			<textarea id="title-field" rows="2" placeholder="Add a page title..."></textarea>
 			<label class="field-label" id="note-label" for="note-field">Note</label>
 			<textarea id="note-field" rows="2" placeholder="Add a note..."></textarea>
 			<label class="field-label" id="source-label">Source</label>
 			<div id="source-url" class="source-url" aria-labelledby="source-label"></div>
+		</div>
+		<div id="section-group" class="sidebar-group">
 			<label class="field-label" id="section-label">Save to</label>
 			<div id="section-picker">
 				<div id="section-selected" tabindex="0" role="combobox" aria-haspopup="listbox" aria-expanded="false" aria-labelledby="section-label"></div>
@@ -107,8 +111,28 @@
 			<button id="cancel-btn">Cancel</button>
 		</div>
 		<div id="success-banner" style="display:none;" role="status">
-			<span id="success-text"></span>
+			<div class="status-row">
+				<span class="status-icon status-icon-success" aria-hidden="true"></span>
+				<span id="success-text" class="status-title"></span>
+			</div>
+			<p id="success-description" class="status-description"></p>
 			<button id="view-onenote-link"></button>
+		</div>
+		<div id="error-banner" style="display:none;" role="alert">
+			<div class="status-row">
+				<span class="status-icon status-icon-error" aria-hidden="true"></span>
+				<span id="error-title" class="status-title"></span>
+			</div>
+			<p id="error-description" class="status-description"></p>
+			<details id="error-details" style="display:none;">
+				<summary></summary>
+				<div class="error-detail-wrap">
+					<pre id="error-detail-text"></pre>
+					<button id="copy-diagnostics" type="button" title="Copy" aria-label="Copy diagnostic information">
+						<span aria-hidden="true">&#x1F4CB;</span>
+					</button>
+				</div>
+			</details>
 		</div>
 		<div id="capture-panel">
 			<div id="status-text"></div>
@@ -117,11 +141,11 @@
 		</div>
 	</div>
 	<div id="user-info">
-		<a id="feedback-link" href="#"><img src="images/feedback_smiley.svg" alt="" class="feedback-icon"><span id="feedback-label">Feedback</span></a>
-		<div id="user-info-right">
+		<div id="user-info-left">
 			<span id="user-email"></span>
 			<a id="signout-link" href="#">Sign out</a>
 		</div>
+		<a id="feedback-link" href="#"><img src="images/feedback_smiley.svg" alt="" class="feedback-icon"><span id="feedback-label">Feedback</span></a>
 	</div>
 </div>
 <div id="aria-status" class="sr-only" aria-live="polite" aria-atomic="true"></div>

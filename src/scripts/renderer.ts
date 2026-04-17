@@ -40,6 +40,20 @@ window.addEventListener("focus", resetInactivityTimer);
 let iframe = document.getElementById("content-frame") as HTMLIFrameElement;
 let previewFrame = document.getElementById("preview-frame") as HTMLIFrameElement;
 let previewContainer = document.getElementById("preview-container") as HTMLDivElement;
+let previewArea = document.getElementById("preview-area") as HTMLDivElement;
+
+// Show rounded frame overlay on the preview area (applied after capture completes)
+function showPreviewFrame() {
+	previewArea.classList.add("preview-ready");
+	unlockResize();
+}
+
+// Remove rounded frame overlay so content-frame is full-bleed during capture.
+// Critical: if .preview-ready is set during captureVisibleTab, the 8px margin
+// around content-frame bakes preview-area background into the screenshot.
+function hidePreviewFrame() {
+	previewArea.classList.remove("preview-ready");
+}
 
 // Sidebar elements
 let statusText = document.getElementById("status-text") as HTMLDivElement;
@@ -274,7 +288,7 @@ port.onMessage.addListener((msg: any) => {
 
 // Apply localized strings to UI elements
 sidebarTitle.textContent = strings.clipperTitle;
-cancelBtn.textContent = strings.close;
+cancelBtn.textContent = strings.cancel;
 let modeMap: any = { fullpage: strings.modeFullPage, article: strings.modeArticle, bookmark: strings.modeBookmark, region: strings.modeRegion };
 document.querySelectorAll(".mode-btn").forEach((btn) => {
 	let mode = btn.getAttribute("data-mode");
@@ -299,6 +313,8 @@ document.querySelectorAll(".mode-btn").forEach((btn) => {
 let sourceLabelEl = document.getElementById("source-label");
 if (sourceLabelEl) { sourceLabelEl.textContent = strings.sourceLabel; }
 // Field labels
+let modeLabelEl = document.getElementById("mode-label");
+if (modeLabelEl) { modeLabelEl.textContent = loc("WebClipper.Label.WhatToCapture", "What do you want to capture?"); }
 let titleLabelEl = document.getElementById("title-label");
 if (titleLabelEl) { titleLabelEl.textContent = loc("WebClipper.Label.PageTitle", "Title"); }
 let noteLabelEl = document.getElementById("note-label");
@@ -352,6 +368,8 @@ function selectSection(id: string, label: string) {
 	// (but don't touch button state — that's managed by capture/save flow)
 	let banner = document.getElementById("success-banner");
 	if (banner) { banner.style.display = "none"; }
+	let errBanner = document.getElementById("error-banner");
+	if (errBanner) { errBanner.style.display = "none"; }
 	saveDone = false;
 }
 
@@ -453,6 +471,38 @@ function flattenSectionGroups(groups: any[], parentPath: string, preselectedId: 
 	}
 }
 
+function makeCollapsibleHeading(li: HTMLLIElement, depth: number) {
+	li.setAttribute("data-depth", "" + depth);
+	// Make the heading keyboard-accessible: focusable + role=button for AT to announce action
+	li.setAttribute("tabindex", "-1"); // kept out of Tab order; reachable via arrow-key nav within the listbox
+	li.setAttribute("role", "button");
+	let arrow = document.createElement("img");
+	arrow.className = "collapse-arrow";
+	arrow.src = "images/arrow_down.png";
+	arrow.alt = "";
+	li.appendChild(arrow);
+	li.setAttribute("aria-expanded", "true");
+	let toggle = () => {
+		let collapsed = li.classList.toggle("collapsed");
+		li.setAttribute("aria-expanded", collapsed ? "false" : "true");
+		arrow.src = collapsed ? "images/arrow_right.png" : "images/arrow_down.png";
+		// Toggle visibility of sibling items until next heading at same or shallower depth
+		let next = li.nextElementSibling as HTMLElement;
+		while (next) {
+			if (next.classList.contains("section-heading")) {
+				let nextDepth = parseInt(next.getAttribute("data-depth") || "0", 10);
+				if (nextDepth <= depth) { break; } // same or higher level — stop
+			}
+			next.style.display = collapsed ? "none" : "";
+			next = next.nextElementSibling as HTMLElement;
+		}
+	};
+	li.addEventListener("click", toggle);
+	li.addEventListener("keydown", (e) => {
+		if (e.key === "Enter" || e.key === " ") { e.preventDefault(); toggle(); }
+	});
+}
+
 function addNotebookHeading(name: string) {
 	let li = document.createElement("li");
 	li.className = "section-heading notebook-heading";
@@ -463,6 +513,7 @@ function addNotebookHeading(name: string) {
 	let span = document.createElement("span");
 	span.textContent = name;
 	li.appendChild(span);
+	makeCollapsibleHeading(li, 0);
 	sectionList.appendChild(li);
 }
 
@@ -477,6 +528,7 @@ function addGroupHeading(name: string, depth: number) {
 	let span = document.createElement("span");
 	span.textContent = name;
 	li.appendChild(span);
+	makeCollapsibleHeading(li, depth);
 	sectionList.appendChild(li);
 }
 
@@ -675,7 +727,7 @@ async function fetchFreshNotebooks() {
 		// notebook lists (newly created sections wouldn't appear).
 
 		let apiUrl = "https://www.onenote.com/api/v1.0/me/notes/notebooks"
-			+ "?$expand=sections,sectionGroups($expand=sections,sectionGroups)";
+			+ "?$expand=sections,sectionGroups($expand=sections,sectionGroups($expand=sections,sectionGroups($expand=sections,sectionGroups)))";
 		let response = await fetch(apiUrl, {
 			headers: { "Authorization": "Bearer " + accessToken }
 		});
@@ -792,7 +844,7 @@ function resetSaveState() {
 	saveBtn.onclick = undefined;
 	saveBtn.textContent = strings.saveToOneNote;
 	saveBtn.disabled = false;
-	cancelBtn.textContent = strings.close;
+	cancelBtn.textContent = strings.cancel;
 	cancelBtn.disabled = false;
 	// Reset capture panel
 	capturePanel.style.display = "none";
@@ -800,9 +852,11 @@ function resetSaveState() {
 	statusText.innerHTML = "";
 	(document.getElementById("progress-bar-track") as HTMLElement).style.display = "";
 	progressInfo.textContent = "";
-	// Hide success banner
+	// Hide success / error banners
 	let successBanner = document.getElementById("success-banner");
 	if (successBanner) { successBanner.style.display = "none"; }
+	let errBanner = document.getElementById("error-banner");
+	if (errBanner) { errBanner.style.display = "none"; }
 }
 
 // Save article working state (highlights, edits) before switching away
@@ -1205,11 +1259,30 @@ function extractBookmark() {
 	let pageTitle = titleField.value || iframeDoc.title || "";
 	let pageUrl = sourceUrl.textContent || "";
 
-	// Description: og:description → meta description → twitter:description
+	// Description: og:description → meta description → twitter:description → keywords → article:tag → page text
+	// (matches legacy BookmarkHelper fallback chain)
 	let description = getMetaContent(iframeDoc, "og:description", "property")
 		|| getMetaContent(iframeDoc, "description", "name")
 		|| getMetaContent(iframeDoc, "twitter:description", "name")
+		|| getMetaContent(iframeDoc, "keywords", "name")
+		|| getMetaContent(iframeDoc, "article:tag", "property")
 		|| "";
+	// Last resort: grab visible text from the page body (matches legacy getTextOnPage)
+	if (!description && iframeDoc.body) {
+		let walker = iframeDoc.createTreeWalker(iframeDoc.body, NodeFilter.SHOW_TEXT, null);
+		let words: string[] = [];
+		let node: Node | null;
+		while ((node = walker.nextNode()) && words.length < 50) {
+			let text = (node.textContent || "").trim();
+			if (text) {
+				let nodeWords = text.split(/\s+/);
+				for (let i = 0; i < nodeWords.length && words.length < 50; i++) {
+					words.push(nodeWords[i]);
+				}
+			}
+		}
+		description = words.join(" ");
+	}
 	if (description.length > 140) {
 		description = description.substring(0, 140) + "...";
 	}
@@ -1229,47 +1302,83 @@ function extractBookmark() {
 		}
 	}
 
-	// Build bookmark card HTML
-	let thumbHtml = "";
-	if (thumbnailSrc) {
-		thumbHtml = "<td width=\"112\" style=\"padding-top:9px;vertical-align:top;\">"
-			+ "<img src=\"" + escapeAttr(thumbnailSrc) + "\" width=\"112\" alt=\"thumbnail\" style=\"max-height:112px;object-fit:cover;\">"
-			+ "</td>";
+	// Convert thumbnail to base64 data URL (OneNote API can't fetch external URLs)
+	// HTML structure matches legacy BookmarkHelper + createPostProcessessedHtml exactly:
+	// - Outer div + tables get fontStyleString (tables don't inherit from div in OneNote API)
+	// - No table-layout/border-collapse on outer table (legacy didn't have them)
+	// - Thumbnail <td> has only padding-top:9px (no vertical-align, no object-fit)
+	// - <img> has id="bookmarkThumbnail", no inline style (legacy pattern)
+	let buildBookmark = (resolvedThumbSrc: string) => {
+		let thumbHtml = "";
+		if (resolvedThumbSrc) {
+			thumbHtml = "<td width=\"112\" style=\"padding-top:9px;\">"
+				+ "<img id=\"bookmarkThumbnail\" src=\"" + escapeAttr(resolvedThumbSrc) + "\" alt=\"thumbnail\" width=\"112\" />"
+				+ "</td>";
+		}
+
+		let titleHtml = "";
+		if (pageTitle) {
+			titleHtml = "<tr><td><h2 style=\"margin:0;margin-bottom:13px;\">" + escapeHtml(pageTitle) + "</h2></td></tr>";
+		}
+
+		let descHtml = "";
+		if (description) {
+			descHtml = "<tr><td style=\"word-wrap:break-word;\">" + escapeHtml(description) + "</td></tr>";
+		}
+
+		let urlStyle = "white-space:nowrap;overflow:hidden;text-overflow:ellipsis;padding:2px;";
+		if (description) { urlStyle += "padding-bottom:13px;"; }
+
+		let secondTdStyle = resolvedThumbSrc ? "padding-left:16px;" : "";
+
+		let bmFontStyle = "font-size: 16px; font-family: Verdana;";
+		cachedBookmarkHtml = "<div style=\"" + bmFontStyle + "\">"
+			+ "<table style=\"" + bmFontStyle + "\">"
+			+ "<tr style=\"vertical-align:top;\">"
+			+ thumbHtml
+			+ "<td style=\"" + secondTdStyle + "\"><table style=\"" + bmFontStyle + "\">"
+			+ titleHtml
+			+ "<tr><td style=\"" + urlStyle + "\"><a href=\"" + escapeAttr(pageUrl) + "\" target=\"_blank\">" + escapeHtml(pageUrl) + "</a></td></tr>"
+			+ descHtml
+			+ "</table></td>"
+			+ "</tr></table></div>";
+
+		bookmarkLoaded = true;
+		renderBookmarkHtml(cachedBookmarkHtml);
+		if (currentMode === "bookmark") {
+			saveBtn.disabled = false;
+			saveBtn.textContent = strings.saveToOneNote;
+		}
+	};
+
+	if (thumbnailSrc && thumbnailSrc.indexOf("data:") !== 0) {
+		// Fetch image and convert to base64 data URL (matches legacy BookmarkHelper → DomUtils.getImageDataUrl)
+		imageToDataUrl(thumbnailSrc, (dataUrl: string) => {
+			buildBookmark(dataUrl || thumbnailSrc); // fall back to raw URL if conversion fails
+		});
+	} else {
+		buildBookmark(thumbnailSrc);
 	}
+}
 
-	let titleHtml = "";
-	if (pageTitle) {
-		titleHtml = "<tr><td><h2 style=\"margin:0;margin-bottom:13px;\">" + escapeHtml(pageTitle) + "</h2></td></tr>";
-	}
-
-	let descHtml = "";
-	if (description) {
-		descHtml = "<tr><td style=\"word-wrap:break-word;\">" + escapeHtml(description) + "</td></tr>";
-	}
-
-	let urlStyle = "white-space:nowrap;overflow:hidden;text-overflow:ellipsis;padding:2px;";
-	if (description) { urlStyle += "padding-bottom:13px;"; }
-
-	let secondTdStyle = thumbnailSrc ? "padding-left:16px;" : "";
-
-	let bmFontStyle = "font-size:16px;font-family:Verdana;";
-	cachedBookmarkHtml = "<div style=\"" + bmFontStyle + "\">"
-		+ "<table style=\"table-layout:auto;border-collapse:collapse;margin-bottom:24px;" + bmFontStyle + "\">"
-		+ "<tr style=\"vertical-align:top;\">"
-		+ thumbHtml
-		+ "<td style=\"" + secondTdStyle + "\"><table style=\"" + bmFontStyle + "\">"
-		+ titleHtml
-		+ "<tr><td style=\"" + urlStyle + "\"><a href=\"" + escapeAttr(pageUrl) + "\" target=\"_blank\" style=\"color:#2e75b5;\">" + escapeHtml(pageUrl) + "</a></td></tr>"
-		+ descHtml
-		+ "</table></td>"
-		+ "</tr></table></div>";
-
-	bookmarkLoaded = true;
-	renderBookmarkHtml(cachedBookmarkHtml);
-	if (currentMode === "bookmark") {
-		saveBtn.disabled = false;
-		saveBtn.textContent = strings.saveToOneNote;
-	}
+// Fetch an image URL and convert to base64 data URL via canvas
+// (OneNote API can't fetch external URLs — matches legacy DomUtils.getImageDataUrl)
+function imageToDataUrl(url: string, callback: (dataUrl: string) => void) {
+	let img = new Image();
+	img.crossOrigin = "anonymous";
+	img.onload = () => {
+		try {
+			let canvas = document.createElement("canvas");
+			canvas.width = img.naturalWidth;
+			canvas.height = img.naturalHeight;
+			(canvas.getContext("2d") as CanvasRenderingContext2D).drawImage(img, 0, 0);
+			callback(canvas.toDataURL("image/png"));
+		} catch (e) {
+			callback(""); // tainted canvas or other error — fall back
+		}
+	};
+	img.onerror = () => { callback(""); };
+	img.src = url;
 }
 
 function getMetaContent(doc: Document, value: string, attr: string): string {
@@ -1298,7 +1407,13 @@ function renderBookmarkHtml(html: string) {
 		+ "a { color: #2e75b5; text-decoration: underline; pointer-events: none; cursor: default; }"
 		+ "::-webkit-scrollbar{width:6px} ::-webkit-scrollbar-thumb{background:rgba(0,0,0,0.2);border-radius:3px} ::-webkit-scrollbar-track{background:transparent}"
 		+ "h2 { font-size: 18px; color: rgb(46,117,181); font-weight: normal; }"
-		+ "img { border-radius: 2px; }";
+		+ "img { border-radius: 2px; }"
+		// Preview-only: constrain bookmark to body width.
+		// table-layout:fixed + width:100% on outer table respects max-width:624px on body.
+		// Thumbnail <td> keeps its explicit width="112" via CSS min-width.
+		+ "body > div > table { table-layout: fixed; width: 100%; }"
+		+ "body > div > table td[width] { width: 112px; min-width: 112px; }"
+		+ "body > div > table td > table { width: 100%; table-layout: fixed; }";
 	let fullHtml = "<!DOCTYPE html><html><head><style>" + bookmarkCss + "</style></head><body>"
 		+ html + "</body></html>";
 	pDoc.open();
@@ -1363,7 +1478,7 @@ function renderRegionThumbnails() {
 		img.src = regionImages[i];
 		let removeBtn = document.createElement("button");
 		removeBtn.className = "region-remove-btn";
-		removeBtn.textContent = "\u00D7"; // × symbol
+		removeBtn.textContent = loc("WebClipper.Action.Discard", "Discard"); // icon injected via CSS ::before
 		removeBtn.title = loc("WebClipper.Preview.RemoveSelectedRegion", "Remove");
 		removeBtn.addEventListener("click", ((idx: number) => () => {
 			regionImages.splice(idx, 1);
@@ -1377,19 +1492,30 @@ function renderRegionThumbnails() {
 
 			}
 		})(i));
-		thumb.appendChild(img);
+		// Per Figma: Discard button sits ABOVE the image (stacked), not an overlay
+		let imgWrap = document.createElement("div");
+		imgWrap.className = "region-image-wrap";
+		imgWrap.appendChild(img);
 		thumb.appendChild(removeBtn);
+		thumb.appendChild(imgWrap);
 		previewContainer.appendChild(thumb);
 	}
 
 	// "Add Another Region" button
 	let addBtn = document.createElement("button");
 	addBtn.className = "region-add-btn";
-	addBtn.textContent = "+ " + loc("WebClipper.Preview.Header.AddAnotherRegionButtonLabel", "Add another region");
+	addBtn.textContent = loc("WebClipper.Preview.Header.AddAnotherRegionButtonLabel", "Add another region"); // + icon rendered via CSS ::before
 	addBtn.addEventListener("click", () => {
 		startRegionCapture();
 	});
 	previewContainer.appendChild(addBtn);
+	// Add a spacer below the button so it sits in the upper half of the preview area
+	let spacer = document.createElement("div");
+	spacer.style.height = Math.max(0, Math.round(previewContainer.clientHeight * 0.55)) + "px";
+	spacer.style.flexShrink = "0";
+	previewContainer.appendChild(spacer);
+	// Scroll the add button to the top of the preview area so it's prominently visible
+	setTimeout(() => { addBtn.scrollIntoView({ behavior: "smooth", block: "start" }); }, 100);
 
 	if (regionImages.length > 0) {
 		saveBtn.disabled = false;
@@ -1543,6 +1669,8 @@ function switchToPdf() {
 	// Clear success banner
 	let banner = document.getElementById("success-banner");
 	if (banner) { banner.style.display = "none"; }
+	let errBanner = document.getElementById("error-banner");
+	if (errBanner) { errBanner.style.display = "none"; }
 	saveDone = false;
 	// Re-render PDF pages (preview-container may have region thumbnails from region mode)
 	if (pdfDoc) {
@@ -1629,6 +1757,7 @@ function enterPdfMode(url: string) {
 	// Set mode to PDF
 	currentMode = "pdf";
 	fullPageComplete = true; // allow mode switching to bookmark
+	showPreviewFrame();
 
 	// Show preview container for PDF pages
 	iframe.style.display = "none";
@@ -1663,21 +1792,37 @@ function enterPdfMode(url: string) {
 
 function setupPdfOptions() {
 	let radios = document.querySelectorAll('input[name="pdf-pages"]') as NodeListOf<HTMLInputElement>;
-	radios.forEach(function(radio) {
-		radio.addEventListener("change", function() {
-			pdfAllPages = radio.value === "all";
-			pdfRangeInput.disabled = pdfAllPages;
-			// Update aria-checked
-			radios.forEach(function(r) { r.setAttribute("aria-checked", r.checked ? "true" : "false"); });
-			if (!pdfAllPages) {
-				pdfRangeInput.focus();
-				validatePageRange();
-			} else {
-				pdfRangeError.style.display = "none";
-			}
-			updatePdfPageSelection();
+	// Helper — select a radio by value and sync related UI state
+	let selectRadio = function(value: string) {
+		radios.forEach(function(r) {
+			r.checked = (r.value === value);
+			// Native <input type="radio"> conveys checked state — no need for aria-checked
 		});
+		pdfAllPages = value === "all";
+		// Use readonly (not disabled) so the input stays focusable/clickable, and appears visually muted via CSS
+		if (pdfAllPages) {
+			pdfRangeInput.setAttribute("readonly", "");
+			pdfRangeError.style.display = "none";
+		} else {
+			pdfRangeInput.removeAttribute("readonly");
+			validatePageRange();
+		}
+		updatePdfPageSelection();
+	};
+	radios.forEach(function(radio) {
+		radio.addEventListener("change", function() { selectRadio(radio.value); });
 	});
+
+	// Clicking or focusing the range input auto-switches to "Page range" mode
+	let activateRangeMode = function() {
+		if (pdfAllPages) {
+			selectRadio("range");
+			// Give focus after switching so the user can start typing immediately
+			setTimeout(function() { pdfRangeInput.focus(); }, 0);
+		}
+	};
+	pdfRangeInput.addEventListener("mousedown", activateRangeMode);
+	pdfRangeInput.addEventListener("focus", activateRangeMode);
 
 	pdfRangeInput.addEventListener("input", function() {
 		pdfSelectedRange = pdfRangeInput.value;
@@ -1851,14 +1996,14 @@ function generatePdfBookmarkHtml(title: string, url: string): string {
 	let safeTitle = escapeHtml(title);
 	let safeUrl = escapeAttr(url);
 	let displayUrl = escapeHtml(url);
-	let fontStyle = "font-size:16px;font-family:Verdana;";
+	let fontStyle = "font-size: 16px; font-family: Verdana;";
 	let urlStyle = "white-space:nowrap;overflow:hidden;text-overflow:ellipsis;padding:2px;";
 	return "<div style=\"" + fontStyle + "\">"
-		+ "<table style=\"table-layout:auto;border-collapse:collapse;margin-bottom:24px;" + fontStyle + "\">"
+		+ "<table style=\"" + fontStyle + "\">"
 		+ "<tr style=\"vertical-align:top;\">"
 		+ "<td><table style=\"" + fontStyle + "\">"
 		+ "<tr><td><h2 style=\"margin:0;margin-bottom:13px;\">" + safeTitle + "</h2></td></tr>"
-		+ "<tr><td style=\"" + urlStyle + "\"><a href=\"" + safeUrl + "\" target=\"_blank\" style=\"color:#2e75b5;\">" + displayUrl + "</a></td></tr>"
+		+ "<tr><td style=\"" + urlStyle + "\"><a href=\"" + safeUrl + "\" target=\"_blank\">" + displayUrl + "</a></td></tr>"
 		+ "</table></td>"
 		+ "</tr></table></div>";
 }
@@ -2207,6 +2352,9 @@ port.onMessage.addListener((message: any) => {
 	}
 
 	if (message.action === "initCanvas") {
+		// Remove the rounded frame overlay so content-frame is full-bleed during capture.
+		// If left on, captureVisibleTab bakes the 8px preview-area gap into the screenshot.
+		hidePreviewFrame();
 		stitchViewportHeight = message.viewportHeight;
 		stitchContentHeight = message.contentHeight;
 		stitchYOffset = 0;
@@ -2306,6 +2454,7 @@ port.onMessage.addListener((message: any) => {
 				let dataUrl = reader.result as string;
 				fullPageDataUrl = dataUrl; // Cache for mode switching and save
 				fullPageComplete = true;
+				showPreviewFrame();
 
 					// Only update left panel if still viewing Full Page mode
 					if (currentMode === "fullpage") {
@@ -2431,11 +2580,14 @@ port.onMessage.addListener((message: any) => {
 			saveBtn.disabled = false;
 			saveBtn.onclick = undefined;
 			cancelBtn.disabled = false;
-			// Show success banner with optional "View in OneNote" link
+			// Show success inline alert with title + description + optional "View in OneNote" button
 			let successBanner = document.getElementById("success-banner") as HTMLDivElement;
 			let successText = document.getElementById("success-text") as HTMLSpanElement;
+			let successDescription = document.getElementById("success-description") as HTMLParagraphElement;
 			let viewLink = document.getElementById("view-onenote-link") as HTMLButtonElement;
-			successText.textContent = "\u2713 " + loc("WebClipper.Label.ClipSuccessful", "Clip Successful!");
+			successText.textContent = loc("WebClipper.Label.ClipSuccessTitle", "Saved to your notebook");
+			successDescription.textContent = loc("WebClipper.Label.ClipSuccessDescription",
+				"You can access and continue working on it anytime from your notebook.");
 			if (message.pageUrl) {
 				viewLink.textContent = strings.viewInOneNote;
 				viewLink.style.display = "block";
@@ -2446,46 +2598,58 @@ port.onMessage.addListener((message: any) => {
 				};
 			} else {
 				viewLink.style.display = "none";
-				viewLink.onclick = undefined;
+				viewLink.onclick = null; // tslint:disable-line:no-null-keyword
 				logFailure(Failure.Label.OnLaunchOneNoteButton, Failure.Type.Unexpected,
 					{ error: "Page created but missing pageUrl in save response" });
 			}
 			successBanner.style.display = "block";
-			announceToScreenReader(loc("WebClipper.Label.ClipSuccessful", "Clip Successful!"));
+			// role="status" on successBanner auto-announces; no manual aria-live needed
 		} else {
 			unlockSidebar();
 			let errorDetail = message.error || "Unknown error";
-			announceToScreenReader(loc("WebClipper.Error.GenericError", "Something went wrong."));
-			capturePanel.style.display = "flex";
+			// Hide capture panel + progress bar — show inline error banner instead
+			capturePanel.style.display = "none";
+			(document.getElementById("progress-bar-track") as HTMLElement).style.display = "";
 			progressInfo.textContent = "";
 			progressFill.style.width = "0%";
-			// Hide progress bar in error state — the track line looks like a separator
-			(document.getElementById("progress-bar-track") as HTMLElement).style.display = "none";
-			// Error message first, then expandable diagnostics
-			let escapedDetail = escapeHtml(errorDetail);
-			statusText.innerHTML = escapeHtml(loc("WebClipper.Error.GenericError", "Something went wrong. Please try clipping the page again."))
-				+ "<details style=\"margin-top:8px;font-size:12px;\">"
-				+ "<summary style=\"cursor:pointer;color:rgba(255,255,255,0.8);\">"
-				+ escapeHtml(loc("WebClipper.Label.SignInUnsuccessfulMoreInformation", "More information"))
-				+ " <button id=\"copy-diagnostics\" aria-label=\"Copy diagnostic information\" style=\"background:none;border:none;cursor:pointer;font-size:12px;padding:0;vertical-align:baseline;\">&#x1F4CB;</button>"
-				+ "</summary>"
-				+ "<pre id=\"error-detail-text\" style=\"margin-top:6px;font-size:11px;color:rgba(255,255,255,0.85);background:rgba(0,0,0,0.2);padding:8px;border-radius:3px;max-height:120px;overflow-y:auto;white-space:pre-wrap;word-break:break-all;\">"
-				+ escapedDetail + "</pre>"
-				+ "</details>";
-			let copyBtn = document.getElementById("copy-diagnostics");
-			if (copyBtn) {
-				copyBtn.addEventListener("click", function(ev) {
-					ev.stopPropagation();
-					let pre = document.getElementById("error-detail-text");
-					if (pre) {
-						navigator.clipboard.writeText(pre.textContent || "").then(function() {
-							copyBtn.style.color = "#69F0AE";
-							copyBtn.textContent = "\u2713";
-							setTimeout(function() { copyBtn.style.color = ""; copyBtn.innerHTML = "&#x1F4CB;"; }, 1500);
+			statusText.innerHTML = "";
+
+			let errorBanner = document.getElementById("error-banner") as HTMLDivElement;
+			let errorTitle = document.getElementById("error-title") as HTMLSpanElement;
+			let errorDescription = document.getElementById("error-description") as HTMLParagraphElement;
+			let errorDetails = document.getElementById("error-details") as HTMLDetailsElement;
+			let errorDetailText = document.getElementById("error-detail-text") as HTMLPreElement;
+			let errorSummary = errorDetails.querySelector("summary") as HTMLElement;
+
+			errorTitle.textContent = loc("WebClipper.Label.ClipErrorTitle", "Couldn\u2019t save to your notebook");
+			errorDescription.textContent = loc("WebClipper.Label.ClipErrorDescription",
+				"Something went wrong while saving your clip. Try saving your clip again");
+			if (errorDetail && errorDetail !== "Unknown error") {
+				errorSummary.textContent = loc("WebClipper.Label.SignInUnsuccessfulMoreInformation", "More information");
+				errorDetailText.textContent = errorDetail;
+				errorDetails.style.display = "block";
+				// Wire up the copy button — keyboard users can't select text from <pre> easily,
+				// so this button is critical for a11y
+				let copyBtn = document.getElementById("copy-diagnostics") as HTMLButtonElement;
+				if (copyBtn) {
+					copyBtn.onclick = function(ev) {
+						ev.stopPropagation();
+						navigator.clipboard.writeText(errorDetailText.textContent || "").then(function() {
+							let orig = copyBtn.innerHTML;
+							copyBtn.innerHTML = "<span aria-hidden=\"true\">\u2713</span>";
+							copyBtn.classList.add("copied");
+							setTimeout(function() {
+								copyBtn.innerHTML = orig;
+								copyBtn.classList.remove("copied");
+							}, 1500);
 						});
-					}
-				});
+					};
+				}
+			} else {
+				errorDetails.style.display = "none";
 			}
+			errorBanner.style.display = "block";
+			// role="alert" on errorBanner auto-announces; no manual aria-live needed
 			saveBtn.textContent = strings.saveToOneNote;
 			saveBtn.disabled = false;
 		}
@@ -2593,6 +2757,7 @@ port.onMessage.addListener((message: any) => {
 		sourceUrl.textContent = "";
 		sourceUrl.title = "";
 		// Clear stale capture content from DOM
+		hidePreviewFrame(); // remove rounded frame so next capture isn't masked
 		previewContainer.innerHTML = "";
 		previewContainer.style.display = "none";
 		iframe.style.display = "none";
@@ -2609,7 +2774,7 @@ port.onMessage.addListener((message: any) => {
 		saveBtn.disabled = true;
 		saveBtn.textContent = strings.saveToOneNote;
 		saveBtn.onclick = undefined;
-		cancelBtn.textContent = strings.close;
+		cancelBtn.textContent = strings.cancel;
 		// Show sign-in overlay
 		showSignInPanel();
 	}
@@ -2617,10 +2782,12 @@ port.onMessage.addListener((message: any) => {
 
 // Save button triggers clip via port — includes title, annotation, mode, and content for OneNote page creation
 saveBtn.addEventListener("click", () => {
-	// Clear previous success state if re-clipping
+	// Clear previous success / error state if re-clipping
 	saveDone = false;
 	let prevBanner = document.getElementById("success-banner");
 	if (prevBanner) { prevBanner.style.display = "none"; }
+	let prevErrBanner = document.getElementById("error-banner");
+	if (prevErrBanner) { prevErrBanner.style.display = "none"; }
 	logFunnel(Funnel.Label.ClipAttempted);
 	pendingClipEvent = new Event.PromiseEvent(Event.Label.ClipToOneNoteAction);
 
@@ -2827,23 +2994,65 @@ document.addEventListener("wheel", (e) => {
 	e.preventDefault();
 }, { capture: true, passive: false } as any);
 
-// Prevent resize/maximize — snap back to original size
-let origWidth = window.outerWidth;
-let origHeight = window.outerHeight;
+// --- Window resize handling ---
+// During capture: lock size (captureVisibleTab needs consistent viewport).
+// After capture: allow free resizing with minimum enforced via chrome.windows.update.
+let resizeLocked = true; // locked until fullPageComplete or PDF mode
+let captureWidth = window.outerWidth;
+let captureHeight = window.outerHeight;
+let resizing = false;
+let minWidth = 1000;  // sidebar(322) + 678px content area
+let minHeight = 600;
+
+function unlockResize() {
+	resizeLocked = false;
+}
+
 window.addEventListener("resize", () => {
-	if (window.outerWidth !== origWidth || window.outerHeight !== origHeight) {
-		// Check for maximized state — window.resizeTo is ignored when maximized
-		// Use chrome.windows API to un-maximize first, then resize
+	if (resizing) { return; }
+
+	if (resizeLocked) {
+		// During capture — snap back to original size
+		// Tolerance of 2px prevents infinite loops on macOS (DPI rounding)
+		let dw = Math.abs(window.outerWidth - captureWidth);
+		let dh = Math.abs(window.outerHeight - captureHeight);
+		if (dw <= 2 && dh <= 2) { return; }
+		resizing = true;
 		try {
 			chrome.windows.getCurrent({}, (w: any) => {
 				if (w && w.state === "maximized") {
-					chrome.windows.update(w.id, { state: "normal", width: origWidth, height: origHeight });
+					chrome.windows.update(w.id, { state: "normal", width: captureWidth, height: captureHeight }, () => { resizing = false; });
 				} else {
-					window.resizeTo(origWidth, origHeight);
+					window.resizeTo(captureWidth, captureHeight);
+					setTimeout(() => { resizing = false; }, 200);
 				}
 			});
 		} catch (e) {
-			window.resizeTo(origWidth, origHeight);
+			window.resizeTo(captureWidth, captureHeight);
+			setTimeout(() => { resizing = false; }, 200);
+		}
+		return;
+	}
+
+	// After capture — enforce minimum size via chrome.windows.update
+	// (window.resizeTo doesn't reliably work in Chrome popup windows)
+	let w = window.outerWidth;
+	let h = window.outerHeight;
+	if (w < minWidth || h < minHeight) {
+		resizing = true;
+		try {
+			chrome.windows.getCurrent({}, (win: any) => {
+				if (win) {
+					chrome.windows.update(win.id, {
+						width: Math.max(w, minWidth),
+						height: Math.max(h, minHeight)
+					}, () => { resizing = false; });
+				} else {
+					resizing = false;
+				}
+			});
+		} catch (e) {
+			resizing = false;
 		}
 	}
 });

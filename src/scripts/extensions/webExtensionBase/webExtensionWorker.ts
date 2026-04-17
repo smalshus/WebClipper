@@ -376,11 +376,32 @@ export class WebExtensionWorker extends ExtensionWorkerBase<W3CTab, number> {
 
 		WebExtension.browser.windows.getCurrent((currentWindow: chrome.windows.Window) => {
 		let sidebarWidth = 322;
-		let contentWidth = Math.min(currentWindow && currentWindow.width ? currentWindow.width : 1280, 1280);
+		let screenMargin = 32; // leave breathing room so renderer doesn't cover the full screen
+		let browserWidth = currentWindow && currentWindow.width ? currentWindow.width : 1280;
+		let browserHeight = currentWindow && currentWindow.height ? currentWindow.height : 768;
+		let browserLeft = currentWindow ? (currentWindow.left || 0) : 0;
+		let browserTop = currentWindow ? (currentWindow.top || 0) : 0;
+
+		// Content width: use browser width but cap at 1280 (page layout quality ceiling)
+		let contentWidth = Math.min(browserWidth, 1280);
 		let renderWidth = contentWidth + sidebarWidth;
-		let renderHeight = currentWindow ? currentWindow.height : 768;
-		let renderLeft = currentWindow ? currentWindow.left : 0;
-		let renderTop = currentWindow ? currentWindow.top : 0;
+
+		// Clamp to browser window bounds so we don't overflow off-screen.
+		// Browser window is our best proxy for screen size (no screen API in service worker).
+		// If browser is smaller than our desired width, shrink content to fit.
+		let maxWidth = Math.max(browserWidth, 1000); // at least 1000px (sidebar + 678px content)
+		if (renderWidth > maxWidth) {
+			renderWidth = maxWidth;
+			contentWidth = renderWidth - sidebarWidth;
+		}
+
+		// Height: match browser height but cap so we don't produce absurdly tall windows
+		let maxHeight = Math.max(browserHeight - screenMargin, 400);
+		let renderHeight = Math.min(browserHeight, maxHeight);
+
+		// Position: align with browser window's top-left
+		let renderLeft = browserLeft;
+		let renderTop = browserTop;
 
 		let setupPort = (port: chrome.runtime.Port) => {
 			activePort = port;
