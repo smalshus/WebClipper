@@ -115,7 +115,7 @@ iframe#preview-frame {
 		height: 28px; vertical-align: middle; padding: 0;
 		transition: background 0.1s;
 		&:hover:not(.active) { background: @colorSubtleBackgroundHover; }
-		&:focus { outline: 2px solid @focusRingColor !important; outline-offset: 1px; }
+		&:focus { outline: 2px solid @focusRingColor !important; outline-offset: 2px; }
 		&.active {
 			background: @colorSubtleBackgroundHover;
 			border-color: @colorCompoundBrandBackground;
@@ -204,16 +204,18 @@ iframe#preview-frame {
 
 // Mode buttons
 #mode-panel {
-	display: flex; flex-direction: column; gap: 3px;
+	display: flex; flex-direction: column; gap: 8px;
 }
 
-// Fluent outline button style — white background, neutral border, icon + left-aligned text
+// Fluent outline button style — white bg, neutral border, icon + left-aligned text
+// Typography: Body 1 Strong (14px/20px, 600). Padding: 6px 12px (Fluent snudge/m).
 .mode-btn {
-	width: 100%; height: 32px; border: 1px solid @colorNeutralStroke1; border-radius: 4px;
+	width: 100%; border: 1px solid @colorNeutralStroke1; border-radius: 4px;
 	background: @colorNeutralBackground1; color: @colorNeutralForeground1;
-	font-size: 14px; font-family: inherit; cursor: pointer;
-	display: flex; align-items: center; gap: 8px;
-	padding: 0 12px; box-sizing: border-box;
+	font-size: 14px; line-height: 20px; font-weight: 600; font-family: inherit;
+	cursor: pointer;
+	display: flex; align-items: center; gap: 6px;
+	padding: 6px 12px; box-sizing: border-box;
 	transition: background 0.1s;
 	&:hover { background: @colorSubtleBackgroundHover; }
 	&:active { background: @colorSubtleBackgroundPressed; }
@@ -227,9 +229,8 @@ iframe#preview-frame {
 		&:hover { background: @colorNeutralBackground1; }
 	}
 	img {
-		width: 18px; height: 18px;
-		// Icons stay their natural dark color on white background (no invert filter)
-		filter: none;
+		width: 20px; height: 20px;
+		// SVG source uses fill="currentColor" — resolves to black (default) in <img> context
 	}
 	&.selected img {
 		// Selected state: tint icons purple to match text color
@@ -372,13 +373,15 @@ iframe#preview-frame {
 }
 
 // Button row — Clip (primary purple) and Close (outline), Clip first in tab order
+// Typography: Subtitle 2 (Segoe UI Semibold 16px/22px, weight 600) per Figma 242:4424
+// Padding: 6px 12px (Fluent snudge/m) matches Figma
 #button-row {
 	display: flex; gap: 8px;
 	margin-top: 16px;
 	button {
-		flex: 1; height: 36px; padding: 0 12px; border-radius: 4px;
-		font-size: 14px; font-family: inherit; cursor: pointer;
-		font-weight: 600; line-height: 20px;
+		flex: 1; padding: 6px 12px; border-radius: 4px;
+		font-size: 16px; line-height: 22px; font-weight: 600;
+		font-family: inherit; cursor: pointer;
 		transition: background 0.1s;
 		&:disabled { opacity: 0.4; cursor: default; }
 	}
@@ -400,6 +403,18 @@ iframe#preview-frame {
 	border: 1px solid @colorCompoundBrandBackground;
 	&:hover { background: @colorCompoundBrandBackgroundHover; border-color: @colorCompoundBrandBackgroundHover; }
 	&:active { background: @colorCompoundBrandBackgroundPressed; border-color: @colorCompoundBrandBackgroundPressed; }
+}
+
+// Focus indicator for filled primary button — Fluent 2 "halo" pattern.
+// Higher specificity (#sidebar #save-btn = 200) to beat the global #sidebar button:focus (111).
+// Inner white ring is visible against the purple fill.
+// Outer dark ring is visible against the white sidebar background.
+#sidebar #save-btn:focus {
+	outline: none !important;
+	box-shadow:
+		inset 0 0 0 2px #fff,
+		0 0 0 2px @colorNeutralForeground1 !important;
+	border-color: @colorCompoundBrandBackground !important;
 }
 
 // Success / Error status blocks (Fluent inline alert style, no filled banner background)
@@ -439,7 +454,12 @@ iframe#preview-frame {
 		font-size: 14px; font-weight: 600; line-height: 20px;
 		font-family: inherit; cursor: pointer; transition: background 0.1s;
 		&:hover { background: @colorSubtleBackgroundHover; }
-		&:focus { outline: 2px solid @focusRingColor !important; outline-offset: 2px; }
+		// Focus: match Fluent 2 pattern used elsewhere — 1px border (purple) + 1px inset shadow = 2px total edge
+		&:focus {
+			outline: none !important;
+			box-shadow: inset 0 0 0 1px @focusRingColor !important;
+			border-color: @focusRingColor !important;
+		}
 	}
 	// Error diagnostics — kept neutral/subtle, no bright red
 	#error-details {
@@ -689,20 +709,40 @@ iframe#preview-frame {
 	margin-top: 12px;
 }
 
-// --- Focus outlines (Fluent: 2px brand color ring) ---
+// --- Focus outlines (Fluent 2) ---
+// For bordered elements (button, textarea, dropdown): keep the 1px border, turn it purple,
+// and add a 1px inset shadow for a total 2px visible purple edge (Fluent 2 focus stroke width).
+// For text links (<a>, section-list items with no border): use outer outline with offset.
 @focusRingColor: @oneNoteBrand80;
 
 #sidebar button:focus,
-#sidebar a:focus,
 #sidebar textarea:focus,
 #sidebar [tabindex]:focus {
+	outline: none !important;
+	// 1px border (purple) + 1px inset = 2px total visible purple edge
+	box-shadow: inset 0 0 0 1px @focusRingColor !important;
+	border-color: @focusRingColor !important;
+}
+
+// Section list items (headings + options) — no visible border, use outer ring
+#sidebar .section-heading:focus,
+#sidebar .section-item:focus {
 	outline: solid 2px @focusRingColor !important;
-	outline-offset: 1px;
+	outline-offset: -2px !important; // inset so it sits inside the list item (no layout shift)
+	box-shadow: none !important;
+}
+
+// Text links in footer (Sign Out, Feedback) — outer ring with offset
+#sidebar a:focus {
+	outline: solid 2px @focusRingColor !important;
+	outline-offset: 2px;
+	box-shadow: none !important;
 }
 
 .signin-btn:focus {
-	outline: solid 2px @focusRingColor !important;
-	outline-offset: 2px;
+	outline: none !important;
+	box-shadow: inset 0 0 0 1px @focusRingColor !important;
+	border-color: @focusRingColor !important;
 }
 
 // High contrast mode (Windows Contrast Themes) — forced-colors support

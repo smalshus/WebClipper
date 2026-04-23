@@ -2827,7 +2827,8 @@ saveBtn.addEventListener("click", () => {
 
 	lockSidebar();
 	saveBtn.disabled = true;
-	saveBtn.textContent = strings.saving;
+	// Keep the "Clip" label — the "Saving..." status text below the progress bar conveys state
+	// (previous "Saving..." on the button was duplicative with the label)
 	// Show saving status below the buttons
 	capturePanel.style.display = "flex";
 	statusText.textContent = strings.saving;
