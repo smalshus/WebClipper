@@ -60,8 +60,10 @@ On sign-out, `AuthType` is reset to `"None"` and `UserInfoId` to `""` before the
 | Event | Type | Trigger | Properties |
 |-------|------|---------|------------|
 | `ClipToOneNoteAction` | PromiseEvent | Save result (timer from save click) | `CorrelationId`, Status, FailureInfo |
-| `ClipCommonOptions` | BaseEvent | Save button click | `ClipMode` (FullPage/Augmentation/Bookmark/Region), `PageTitleModified`, `AnnotationAdded` |
+| `ClipCommonOptions` | BaseEvent | Save button click | `ClipMode` (FullPage/Augmentation/Bookmark/Region/Pdf), `PageTitleModified`, `AnnotationAdded` |
 | `ClipRegionOptions` | BaseEvent | Save in region mode | `NumRegions` |
+| `ClipPdfOptions` | BaseEvent | Save in PDF mode | `PdfAllPagesClipped`, `PdfAttachmentClipped`, `PdfIsLocalFile`, `PdfIsBatched`, `PdfFileSelectedPageCount`, `PdfFileTotalPageCount` |
+| `PdfByteMetadata` | BaseEvent | Save in PDF mode | `ByteLength`, `BytesPerPdfPage` |
 
 ### Region events
 | Event | Type | Trigger | Properties |
@@ -83,6 +85,7 @@ On sign-out, `AuthType` is reset to `"None"` and `UserInfoId` to `""` before the
 | `augmentationButton` | Article mode selected |
 | `bookmarkButton` | Bookmark mode selected |
 | `regionButton` | Region mode selected |
+| `pdfButton` | PDF mode selected |
 
 ### Error handling
 | Event | Trigger | Properties |
@@ -99,15 +102,16 @@ On sign-out, `AuthType` is reset to `"None"` and `UserInfoId` to `""` before the
 | Event | Reason |
 |-------|--------|
 | `ClearNoOpTracker` | No NoOp tracker in new renderer |
-| `LocalFilesNotAllowedPanelShown` | PDF not yet in new UI |
 | `SetDoNotPromptRatings`, `SetIsRatingsPromptLogicExecutedInEdge`, `ShouldShowRatingsPrompt` | Ratings not in new UI |
 | `ClosePageNavTooltip` | PageNav fires independently |
 | `OrphanedWebClippersDueToExtensionRefresh` | Different lifecycle |
 | `DebugFeedback` | Legacy debug panel |
 | `CompressRegionSelection`, `RegionSelectionLoading` | Different flow |
-| `ClipPdfOptions`, `PdfByteMetadata`, `ClipSelectionOptions` | PDF/Selection modes not yet in new UI |
+| `ClipSelectionOptions` | Selection mode not migrated |
 | `ClipAugmentationOptions` | Legacy article model — `ClipCommonOptions` covers this |
 | `InvokeWhatsNew`, `InvokeTooltip` | Fire through PageNav system independently |
+
+> **Note**: `ClipPdfOptions`, `PdfByteMetadata`, and `LocalFilesNotAllowedPanelShown` were previously listed as not migrated but are now implemented as part of PDF mode parity (see "Clip events" table above).
 
 ## Navigation-away detection
 

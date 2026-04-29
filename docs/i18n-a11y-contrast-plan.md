@@ -58,28 +58,47 @@ Sign-in panel HTML strings (`signin-description`, `signin-msa-btn`, `signin-orgi
 | `"Unknown error"` | — | kept as-is (technical fallback) |
 | `"Sign-in failed..."` | `WebClipper.Error.SignInUnsuccessful` | EXISTS (60 locales) |
 
-### 1d. New keys in strings.json — ZERO
+### 1d. New keys in strings.json
 
-All meaningful strings wired to existing server-translated keys. Four strings remain English-only as acceptable fallbacks (Title, Source, Signing in..., Copy diagnostics aria-label).
+The original V3 i18n pass added zero new keys (everything mapped to existing server-translated keys). The Fluent 2 redesign that followed introduced several new keys (English fallback used until the translation pipeline picks them up):
+
+| Key | Fallback (English) | Used in |
+|-----|--------------------|---------|
+| `WebClipper.Label.WhatToCapture` | "What do you want to capture?" | Caption above mode buttons |
+| `WebClipper.Action.Discard` | "Discard" | Region thumbnail remove pill |
+| `WebClipper.Label.ClipSuccessTitle` | "Saved to your notebook" | Success banner heading |
+| `WebClipper.Label.ClipSuccessDescription` | "You can access and continue working on it anytime from your notebook." | Success banner body |
+| `WebClipper.Label.ClipErrorTitle` | "Couldn't save to your notebook" | Error banner heading |
+| `WebClipper.Label.ClipErrorDescription` | "Something went wrong while saving your clip. Try saving your clip again" | Error banner body |
 
 ---
 
 ## Phase 2: Contrast Fixes
 
-### 2a. Error text color (CRITICAL — 3.8:1 → 5.3:1)
+> **Note**: These fixes were originally calibrated for the dark purple theme. The Fluent 2 white theme that followed brought its own Fluent-tokenized colors, so the specific hex values below are largely superseded. The principles still apply: error text and region button borders meet WCAG AA, focus rings are visible.
 
-`.signin-error` color: `#ff6b6b` → `#ff9999` (~5.3:1 on `#56197c`, passes WCAG AA)
+### 2a. Error text color (legacy purple theme)
 
-### 2b. Region add-button border (1.7:1 → 3.4:1)
+`.signin-error` color: `#ff6b6b` → `#ff9999` (~5.3:1 on `#56197c` purple bg, passed WCAG AA).
 
-Border: `#bbb` → `#999` (~3.4:1 on `#f3f2f1`, passes SC 1.4.11)
-Text: `#666` → `#555` (~5.9:1, improvement)
+**Current** (Fluent 2 white theme): error/danger uses `#a80000` (red) on white surfaces — ~7.7:1, comfortably AA.
 
-### 2c. Focus outlines (mirroring old `@FocusOnPurpleBackground: #f8f8f8`)
+### 2b. Region add-button border
 
-- `#sidebar` interactive elements: `outline: solid 1px #f8f8f8 !important; outline-offset: 1px`
-- Sign-in buttons: `outline-offset: 2px`
-- High contrast mode: `outline: solid 2px Highlight !important; outline-offset: 2px !important`
+Border: `#bbb` → `#999` (~3.4:1 on light gray bg, passed SC 1.4.11).
+
+**Current** (Fluent 2): region "Add another region" button uses Fluent outline pattern — neutral 1px dashed border + Fluent Add icon, hover state turns brand purple.
+
+### 2c. Focus outlines
+
+**Original** (dark purple theme): `outline: solid 1px #f8f8f8 !important; outline-offset: 1px` — light ring on dark sidebar.
+
+**Current** (Fluent 2 white theme): split by element type to avoid doubled borders next to the element's own border:
+- **Bordered elements** (`button`, `textarea`, `[tabindex]`, `.signin-btn`): `outline: none; box-shadow: inset 0 0 0 1px purple; border-color: purple` — single 2px purple edge merging the 1px border + 1px inset.
+- **Text links** (`<a>`): `outline: 2px solid purple; outline-offset: 2px` — outer ring with gap.
+- **Section list items** (no border): `outline: 2px solid purple; outline-offset: -2px` — inset to avoid layout shift in scrollable list.
+- **Clip button** (filled primary): Fluent 2 "halo" pattern — `box-shadow: inset 0 0 0 2px #fff, 0 0 0 2px #242424` so the indicator contrasts against both the purple fill (white inner ring) and the white sidebar bg (dark outer ring).
+- **High contrast** (`@media (forced-colors: active)`): `outline: solid 2px Highlight !important; outline-offset: 2px !important`
 
 ---
 
@@ -113,15 +132,23 @@ Arrow Up/Down/Left/Right + Home/End navigation between mode buttons. Mirrors old
 ### 3f. aria-live regions
 
 - `<div id="aria-status" class="sr-only" aria-live="polite" aria-atomic="true">`
-- `announceToScreenReader()` helper for: capture start/complete, mode change, save start/success/error, sign-in error
+- `announceToScreenReader()` helper for: capture start/complete, mode change, sign-in error
+- Save success/error use `role="status"` / `role="alert"` on the banner element itself (auto-announce, no manual aria-live needed — was double-announcing previously)
 
-### 3g. Sign-in focus management
+### 3g. Sign-in dialog
 
-Focus first sign-in button on overlay show; focus first mode button on overlay hide.
+- Sign-in overlay: `role="dialog"` + `aria-modal="true"` + `aria-label="Sign in"` so AT treats it as a real modal
+- Z-index 9999 + `isolation: isolate` + explicit `width: 100vw; height: 100vh` to defend against macOS full-window edge cases
+- Focus management: focus first sign-in button on overlay show; focus first mode button on overlay hide
 
-### 3h. Copy diagnostics button
+### 3h. Collapsible section headings (Fluent redesign)
 
-`aria-label="Copy diagnostic information"` (hardcoded English — technical label).
+- Section headings made keyboard-accessible: `role="button"`, `tabindex="-1"`, Enter/Space toggles collapse
+- `aria-expanded` reflects state, `data-depth` enables depth-aware sibling visibility toggle
+
+### 3i. Copy diagnostics button
+
+`aria-label="Copy diagnostic information"` (hardcoded English — technical label). Restored after the Fluent inline-alert redesign because keyboard users can't easily select text from a `<pre>` for clipboard copy.
 
 ### 3i. Sign-out disabled state
 

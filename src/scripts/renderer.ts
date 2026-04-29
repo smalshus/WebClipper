@@ -320,7 +320,7 @@ if (titleLabelEl) { titleLabelEl.textContent = loc("WebClipper.Label.PageTitle",
 let noteLabelEl = document.getElementById("note-label");
 if (noteLabelEl) { noteLabelEl.textContent = loc("WebClipper.Label.Annotation", "Note"); }
 let sectionLabelEl = document.getElementById("section-label");
-if (sectionLabelEl) { sectionLabelEl.textContent = loc("WebClipper.Label.ClipLocation", "Save to"); }
+if (sectionLabelEl) { sectionLabelEl.textContent = loc("WebClipper.Label.ClipLocation", "Location"); }
 // Sign-in panel
 let signinDesc = document.getElementById("signin-description");
 if (signinDesc) { signinDesc.textContent = loc("WebClipper.Label.SignInDescription", "Sign in to clip this page to OneNote"); }

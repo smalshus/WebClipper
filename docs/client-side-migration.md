@@ -53,7 +53,7 @@ The server-side approach used Puppeteer to render sanitized HTML and produce a f
 3. **Port-based communication** — The renderer page connects to the service worker via `chrome.runtime.connect({ name: "renderer" })`. Commands (loadContent, scroll) are exchanged over this port
 4. **Renderer loads content** — Reads HTML from `chrome.storage.session`, strips `<script>` tags, preserves `<style>`, `<link rel="stylesheet">`, and `<meta>` tags. Rewrites relative URLs (images, stylesheets, srcset) to absolute using `new URL(relative, baseUrl)` (CSP blocks `<base href>` on extension pages). Fetches external stylesheets via `fetch()` and inlines as `<style>` blocks. Renders content inside an iframe for CSS isolation. Injects `[hidden]{display:none!important}` to enforce HTML hidden attribute. Neutralizes fixed/sticky positioning with `!important` after stylesheets load. User interaction blocked by transparent overlay div (`#interaction-shield`) + keyboard/wheel JS listeners
 5. **Scroll-capture with incremental stitching** — The service worker tells the renderer to scroll to each viewport position, waits 500ms (Chrome's `MAX_CAPTURE_VISIBLE_TAB_CALLS_PER_SECOND` rate limit = 2/sec), then calls `captureVisibleTab()` to take a PNG screenshot (lossless). Each capture is sent back to the renderer via port for immediate drawing onto a hidden canvas (`display:none`, invisible to captureVisibleTab). Scroll stall detection stops capture when `scrollY` stops changing. Canvas height capped at pre-conversion `contentHeight` or 16,384px
-6. **Finalize to Blob** — When capture is complete, the renderer trims the canvas to actual content height, converts to JPEG 90% via `canvas.toBlob()`, stores the single final data URL in `chrome.storage.session`. The helper reads this single image and converts to Blob via `fetch(dataUrl).then(r => r.blob())`
+6. **Finalize to Blob** — When capture is complete, the renderer trims the canvas to actual content height, converts to JPEG 95% via `canvas.toBlob()`, caches the data URL in a renderer-page variable (`fullPageDataUrl`). On user clicking Clip, the renderer streams the image to the worker via chunked port messages (`saveImage` per image), avoiding session storage entirely
 7. **Binary MIME part upload** — The Blob is sent as a binary MIME part in the multipart Graph API request (`<img src="name:FullPageImageXXXX" />`), eliminating ~33% base64 encoding overhead
 8. **Cleanup** — Renderer window closed, session storage cleaned up (input keys by worker, output key by helper)
 
@@ -153,13 +153,14 @@ Worker receives contentCaptureComplete
 Renderer loads content into iframe, sends "dimensions"
     → Worker runs scroll-capture loop (scroll → captureVisibleTab → drawCapture)
     → Renderer stitches on hidden canvas, finalizes to JPEG 95%
-    → Stores fullPageFinalImage in session storage
+    → Caches dataUrl in page variable `fullPageDataUrl` (no session storage)
 
 User clicks Clip
-    → Renderer sends "save" via port
-    → Worker refreshes token (auth.updateUserInfoData)
-    → Worker reads JPEG from session storage, builds multipart form
-    → Worker POSTs to OneNote API, returns saveResult
+    → Renderer sends "save" with metadata + saveImageCount via port
+    → Renderer streams images via chunked "saveImage" port messages (one per image)
+    → For PDF mode: optional "saveAttachment" message with binary PDF bytes
+    → Worker accumulates chunks per-port (multi-window safe), refreshes token,
+      builds multipart form, POSTs to OneNote API, returns saveResult
 ```
 
 ---
@@ -171,10 +172,11 @@ User clicks Clip
 | `@mozilla/readability` for article extraction | Apache 2.0, used by Firefox Reader View, well-maintained |
 | FullPage as default clip mode | Augmentation is no longer server-gated; FullPage is more universally useful |
 | Renderer popup window (not direct page scroll) | Avoids visible scrolling, scrollbar artifacts, and clipper UI in screenshots |
-| `chrome.storage.session` as data bus | Port/communicator JSON serialization chokes on multi-MB base64 data; session storage used for HTML input and single final JPEG output |
+| `chrome.storage.session` for HTML/metadata only | Used for content HTML + page metadata (title, URL, contentType). Image data is now sent via chunked port streaming, not session storage |
+| Chunked port streaming for save | Per-port `saveImage` chunks (one message per image) accumulate in worker. Multi-window safe (per-port isolation). Bypasses 10MB session storage quota. Used for full-page screenshot, region thumbnails, and PDF page images |
 | Port-based messaging (`runtime.connect`) | `scripting.executeScript` blocked on extension pages in MV3 |
-| PNG capture, JPEG 90% final output, 1280px width cap | PNG captures are lossless; single JPEG encode at finalize; no double compression; 1280px balances fidelity vs size |
-| Renderer-side incremental stitching | Each PNG capture sent to renderer via port (~1-3MB each, within port limits), drawn onto hidden canvas immediately; avoids storing N captures in session storage (was 4-8MB, now ~1-2MB for single final JPEG) |
+| PNG capture, JPEG 95% final output, 1280px width cap | PNG captures are lossless; single JPEG encode at finalize; no double compression; 1280px balances fidelity vs size |
+| Renderer-side incremental stitching | Each PNG capture sent to renderer via port (~1-3MB each, within port limits), drawn onto hidden canvas immediately; final JPEG cached in `fullPageDataUrl` page variable, sent to worker only at save time |
 | Scroll stall detection | Stops capturing when `scrollY` doesn't change between captures; handles inflated `scrollHeight` from fixed→absolute conversion |
 | Content height cropping | Measures `scrollHeight` before position conversions; uses pre-conversion height to cap canvas, trimming blank space |
 | Interaction shield overlay | Transparent `div` at max z-index blocks all mouse/touch/pointer; keyboard/wheel blocked via JS listeners |
@@ -208,7 +210,8 @@ User clicks Clip
 - PNG captures sent individually to renderer via port (no session storage for intermediates)
 - Canvas height capped at pre-conversion `contentHeight` or 16,384px (Chrome canvas dimension limit)
 - Scroll stall detection stops capture when page can't scroll further
-- Final JPEG 95% stored in session storage (~1-2MB); session storage only holds HTML + metadata + final image
+- Final JPEG 95% cached in renderer-page variable `fullPageDataUrl`; session storage only holds HTML + metadata
+- Image streamed to worker via chunked port messages at save time (no 10MB session storage cap)
 - Very long pages get bottom truncated; OneNote API would likely reject larger images anyway
 
 ### 4. Right-Edge Content
@@ -235,10 +238,45 @@ V3 eliminates this dependency entirely:
 - Worker opens the renderer window directly on button click (no `clipperInject.ts`)
 - Renderer handles sign-in via MSA/OrgId overlay + OAuth popup
 - Content capture via standalone `contentCaptureInject.ts` injected by `scripting.executeScript` (CSP-immune)
-- Save with token refresh, telemetry, region capture, article/bookmark modes — all in the renderer
+- Save with token refresh, telemetry, region capture, article/bookmark/PDF modes — all in the renderer
 - Old sidebar (clipperInject.ts → clipper.tsx → Mithril) is dead code
 
 See `docs/unified-window-plan.md` for the complete V3 architecture, flow diagram, and verification checklist.
+
+---
+
+## Beyond V3: Mode Parity, Fluent 2 Redesign, Reliability
+
+After the V3 self-contained architecture stabilized, additional work brought the renderer to full feature parity with the legacy clipper and applied the Fluent 2 design system.
+
+### Mode parity
+- **PDF support** — full mode in renderer using `pdf.combined.js` (pdfjs-dist v1.7.290): page range parsing/validation, distributed pages (one OneNote page per PDF page), attachment up to 24.9MB, lazy preview rendering. Mode auto-selected when content type is PDF.
+- **Region keyboard** — arrow keys with velocity acceleration (1→5), two-phase Enter (start/complete), ARIA live announcements, seamless keyboard→mouse handoff.
+- **Bookmark thumbnails** — converted to base64 data URL via canvas (matches legacy `DomUtils.getImageDataUrl`); OneNote API can't fetch external URLs. Description fallback chain matches legacy: og:description → description → twitter:description → keywords → article:tag → page text.
+- **Section picker** — `$expand=4` levels (matches legacy `onenotepicker maxExpandedSections = 4`), collapsible notebook/group headings with depth-aware logic and `arrow_down`/`arrow_right` icons.
+
+### Fluent 2 redesign (per Figma `wK4ryPaULoiSDMt2xVc1fH`)
+- White Fluent theme replaces dark purple sidebar; OneNote brand ramp (`Brand/OneNote/50/60/80`) for primary button states.
+- Mode buttons: Fluent outline, icon + left-aligned text, brand-tinted border on selected. Order: Full Page → Region → Bookmark → Article.
+- Inputs/textarea/dropdown: Fluent outline (1px stroke, 1px purple inset shadow on focus = single 2px focus edge, no doubled border).
+- Clip button: filled primary with Fluent 2 "halo" focus (white inner ring + dark outer ring) for contrast against both purple fill and white sidebar bg. Cancel: outline secondary.
+- Sign-in panel: white Fluent theme matching sidebar; `aria-modal="true"` on dialog.
+- Region thumbnails: natural size (no pixelation), Discard pill above each image, 24px gap.
+- Success/error: Fluent inline alerts (icon + title + description + outline secondary CTA), no filled banners.
+- Preview rounded frame (20px radius) overlay drawn after capture — removed before subsequent captures so the rounded margin doesn't bake into screenshots.
+- Typography: Segoe UI Variable. All paddings aligned to multiples of 4 (Fluent spacing scale).
+
+### Reliability / lifecycle
+- **Window resize** — locked during capture (2px macOS tolerance, `resizing` guard); unlocked after via `showPreviewFrame()`. Post-capture min 1000x600 enforced via `chrome.windows.update`. Worker creation: content width capped at min(browserWidth, 1280), total clamped to max(browserWidth, 1000), height clamped to browserHeight−32px.
+- **Service worker keepalive** — 25s ping from renderer prevents MV3 SW suspension.
+- **Inactivity auto-close** — 5-min timer, reset on user input.
+- **Save timeout** — 30s client-side timeout (SW `setTimeout` unreliable); scales with PDF page count (30s + 5s/page).
+- **Nav-away detection** — `tabs.onUpdated` in worker closes renderer when original tab URL changes.
+
+### Telemetry parity
+Full event parity with legacy clipper. Context properties (`AuthType`, `UserInfoId`, `ContentType`) set at sign-in and mode switch; `PromiseEvents` (`ClipToOneNoteAction`, `HandleSignInEvent`, `GetNotebooks`) with accurate Duration; `CloseClipper` only on abandonment (`clipCount===0`); `InvokeClipper` deferred to avoid logger init race; ClipMode uses legacy enum names (`Augmentation`, not `Article`); region/PDF events with proper metadata.
+
+See `docs/telemetry-parity-plan.md` for the full event inventory.
 
 ---
 

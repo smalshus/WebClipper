@@ -28,7 +28,7 @@ Window width: 1280 (content) + 322 (sidebar) = ~1602px
 
 ### What V1 Includes
 - Branded sidebar with OneNote logo (`onenote_logo_clipper.png`)
-- OneNote purple theme via `renderer.less` (uses `@OneNotePurple`, `@DarkBackgroundColor`, `@DarkHoverColor`)
+- (Originally OneNote purple theme; superseded by Fluent 2 white theme — see "Fluent 2 redesign" below)
 - Localized progress text ("Capturing {0} of {1}...") via `fullPageStrings` in session storage
 - Sidebar pixel cropping: `captureVisibleTab` captures full window, canvas only draws left content area
 - Preview phase: iframe hides, scrollable image appears with Save/Close buttons
@@ -202,7 +202,7 @@ Window width: 1280 (content) + 322 (sidebar) = ~1602px
 
 ### Sidebar Implementation
 Plain HTML + TypeScript — no Mithril dependency:
-- **Mode buttons**: 4 buttons with SVG icons. Full Page pre-selected. All modes disabled during capture, enabled after.
+- **Mode buttons**: 5 buttons with SVG icons in order **Full Page → Region → Bookmark → Article → PDF**. PDF hidden by default, shown only when content type is PDF. Full Page pre-selected. All modes disabled during capture, enabled after.
 - **Title**: `<textarea>` pre-filled from page title (session storage), editable
 - **Note**: `<textarea>` placeholder "Add a note..."
 - **Source URL**: read-only display from session storage
@@ -213,14 +213,15 @@ Plain HTML + TypeScript — no Mithril dependency:
 
 ### Region Capture
 Standalone `regionOverlay.ts` injected directly into original tab via `scripting.executeScript`. No Mithril, no clipper.tsx reactivation.
-- **Overlay**: Full-viewport div with crosshair cursor, canvas-based dark overlay with hole-punch selection
-- **Instruction bar**: Centered pill at top with i18n instruction text + "Back (Esc)" button. Uses Shadow DOM for CSS isolation from page styles. Hides during drag, reappears on too-small selection. i18n strings passed from renderer → worker → `window.__regionStrings` injection before overlay script.
-- **Selection**: Mouse drag draws rectangle. Min 5px. Esc/Back cancels (stays in region mode, shows thumbnails or "Add another region").
+- **Overlay**: Full-viewport div with canvas-drawn crosshair (cursor:none, drawn for both mouse and keyboard). Dark overlay with hole-punch selection.
+- **Instruction bar**: Shadow DOM pill with i18n instruction text + "Back (Esc)" button. CSS-isolated from page styles. Hides during drag, reappears on too-small selection. i18n strings passed from renderer → worker → `window.__regionStrings` injection before overlay script.
+- **Mouse selection**: Drag draws rectangle. Min 5px. Esc/Back cancels (stays in region mode, shows thumbnails or "Add another region").
+- **Keyboard selection**: Arrow keys with velocity acceleration (1→5), two-phase Enter (start → complete), ARIA live announcements. Seamless keyboard→mouse handoff (preserves start point).
 - **Message format**: JSON string via `chrome.runtime.sendMessage` (required by offscreen.ts message handler)
 - **Capture**: Worker captures original tab as JPEG 95% via `captureVisibleTab`, sends full image + coords via port
 - **Crop**: Renderer crops using canvas with DPR handling, converts to JPEG 95%
-- **Multi-region**: `regionImages[]` array accumulates captures. Thumbnails with ×remove buttons and "+Add another region" button. Regions cached across mode switches within session. Each region stored as separate session storage key (`regionImage_0`, `regionImage_1`, ...) to avoid size limits.
-- **Save**: Worker reads individual region keys, converts each to blob, builds ONML with one `<img>` per region separated by `&nbsp;`
+- **Multi-region**: `regionImages[]` page-variable array accumulates captures (no session storage). Thumbnails at natural size (no pixelation, per designer spec) with **Discard pill above each image** (translucent black 5% bg, trash icon + label). 24px gap between captures. Cached across mode switches within session.
+- **Save**: Worker accumulates per-port `saveImage` chunks (one per region) and builds ONML with one `<img>` per region.
 - **Focus**: Renderer blur handler skips re-focus when `currentMode === "region"`. Worker focuses original tab's window via `tabs.get` + `windows.update`.
 
 ### Sign-Out Flow
@@ -235,32 +236,52 @@ Message-based, stays in renderer window (V3):
 Auto-fetch on renderer open (runs in background during capture):
 1. Reads access token from `localStorage.userInformation` (TimeStampedData format)
 2. Checks token expiration: `(lastUpdated + accessTokenExpiration * 1000 - 180000) < Date.now()`
-3. Fetches `https://www.onenote.com/api/v1.0/me/notes/notebooks?$expand=sections,sectionGroups($expand=sections,sectionGroups)`
+3. Fetches `https://www.onenote.com/api/v1.0/me/notes/notebooks?$expand=sections,sectionGroups($expand=sections,sectionGroups($expand=sections,sectionGroups($expand=sections,sectionGroups)))` — 4 levels deep, matches legacy `onenotepicker` `maxExpandedSections = 4`
 4. Compares with cached — only updates dropdown if data changed
 5. Preserves selected section if still exists in fresh data
 6. Silently keeps cached data on failure
 
+**Hierarchical picker UI**: Notebook and section-group headings rendered as `role="button"` collapsible toggles with `arrow_down`/`arrow_right` icons. Depth-aware collapse logic walks `nextElementSibling` and breaks at headings of same/shallower depth (`data-depth` attribute). Section items rendered as `role="option"` with depth-based padding-left.
+
 ### Save Flow (Worker Side)
-Worker receives `{ action: "save" }` port message and:
-1. Reads page URL from session storage
-2. Gets access token from `clipperData.getValue("userInformation")` → `data.accessToken`
-3. Builds OneNote page ONML: annotation → "Clipped from" citation → content
-   - Full Page: image MIME part from `fullPageFinalImage` session storage
-   - Region: multiple image MIME parts from `regionImage_N` session storage keys
+Save uses chunked port streaming — no session storage for image data:
+1. Renderer sends `{ action: "save", saveImageCount: N, saveAttachment: bool, ...metadata }` (title, annotation, url, mode, sectionId, contentHtml, etc.)
+2. Renderer streams `{ action: "saveImage", index, dataUrl }` messages (one per image)
+3. For PDF mode: optional `{ action: "saveAttachment", dataUrl }` message with binary PDF bytes
+4. Worker accumulates chunks in per-port variables (`pendingSave`, `saveImages[]`, `saveAttachmentData`); `executeSave()` runs when all expected chunks received
+5. Worker reads access token from `clipperData.getValue("userInformation")` → `data.accessToken`
+6. Worker builds OneNote page ONML:
+   - Full Page: single image MIME part
+   - Region: multiple image MIME parts (one per region)
    - Article/Bookmark: HTML from `contentHtml` message field
-4. Generates UTC offset timestamp matching `OneNotePage.formUtcOffsetString`
-5. POSTs multipart form to `https://www.onenote.com/api/v1.0/me/notes/sections/{sectionId}/pages`
-6. On success: parses `links.oneNoteWebUrl.href` from response, sends `saveResult` with `pageUrl`
-7. On error: captures error message, status, X-CorrelationId, X-UserSessionId, date; sends as `saveResult`
+   - PDF (non-distributed): all selected pages as MIME parts + optional `<object>` attachment
+   - PDF (distributed): sequential POSTs, one OneNote page per PDF page
+7. Generates UTC offset timestamp matching `OneNotePage.formUtcOffsetString`
+8. POSTs multipart form to `https://www.onenote.com/api/v1.0/me/notes/sections/{sectionId}/pages`
+9. On success: parses `links.oneNoteWebUrl.href` from response, sends `saveResult` with `pageUrl`
+10. On error: captures error message, status, X-CorrelationId, X-UserSessionId, date; sends as `saveResult`
+
+**Per-port isolation**: Each renderer port has its own accumulator, so multiple renderer windows can save concurrently without interfering. Bypasses the 10MB `chrome.storage.session` quota that was a bottleneck for large captures.
 
 ### i18n
 Renderer reads `localStorage.locStrings` directly (shared extension origin). Falls back to hardcoded English. No session storage dependency for strings (legacy `fullPageStrings` passthrough still exists in fullPageScreenshotHelper but unused).
+
+**New i18n keys** added by the Fluent 2 redesign (English fallback used until added to translation pipeline):
+- `WebClipper.Label.WhatToCapture` — "What do you want to capture?" caption above mode buttons
+- `WebClipper.Action.Discard` — "Discard" label on region thumbnail remove pill
+- `WebClipper.Label.ClipSuccessTitle` — "Saved to your notebook"
+- `WebClipper.Label.ClipSuccessDescription` — "You can access and continue working on it anytime from your notebook."
+- `WebClipper.Label.ClipErrorTitle` — "Couldn't save to your notebook"
+- `WebClipper.Label.ClipErrorDescription` — "Something went wrong while saving your clip. Try saving your clip again"
 
 ### Window Lifecycle
 - **Duplicate prevention**: `closeAllFramesAndInvokeClipper` override checks `activeRendererWindowId`
 - **Tab navigation**: `tabs.onUpdated` listener closes renderer when source tab URL changes
 - **Focus retention**: `blur` handler re-focuses renderer (disabled after save and during region capture)
-- **Resize lock**: `resize` handler snaps back to original dimensions
+- **Resize**: locked during capture (2px macOS tolerance, `resizing` guard flag), unlocked after via `showPreviewFrame()`. Post-capture min 1000x600 enforced via `chrome.windows.update`. Worker creation: content width capped at min(browserWidth, 1280), total clamped to max(browserWidth, 1000), height clamped to browserHeight − 32px.
+- **Service worker keepalive**: 25s ping from renderer prevents MV3 SW suspension
+- **Inactivity auto-close**: 5-min timer, reset on user input
+- **Save timeout**: 30s client-side timeout (SW `setTimeout` unreliable); scales with PDF page count (30s + 5s/page)
 - **Cleanup**: port disconnect (Cancel click or window close) triggers worker cleanup
 
 ### Files Modified (V2/V3)
@@ -291,9 +312,9 @@ Renderer reads `localStorage.locStrings` directly (shared extension origin). Fal
 - [x] LESS styles compiled and deployed
 
 ### V2/V3 (Done)
-- [x] Mode buttons switch left panel content (Full Page, Article, Bookmark, Region)
+- [x] Mode buttons switch left panel content (Full Page, Region, Bookmark, Article, PDF)
 - [x] Article mode: Readability extracts content directly from content-frame DOM
-- [x] Bookmark mode: metadata card with og:image/description from DOM
+- [x] Bookmark mode: metadata card with og:image/description from DOM (thumbnail base64-converted via canvas — OneNote API can't fetch external URLs)
 - [x] Title editable, Note field, Source URL display
 - [x] Custom section picker (ul/li dropdown) with scrollbar + auto-refresh from API
 - [x] Clip saves to OneNote via direct fetch to API (multipart form)
@@ -362,7 +383,8 @@ Renderer reads `localStorage.locStrings` directly (shared extension origin). Fal
 ### Technical Debt
 8. ~~fullPageStrings in session storage~~ — Resolved. Removed legacy i18n passthrough from fullPageScreenshotHelper.ts. Renderer reads from localStorage directly.
 9. ~~fullPageScreenshotHelper promise~~ — Resolved. Promise now resolves on `finalizeComplete` with `{ success: true, format: "jpeg", cssWidth }`. Session storage cleanup runs correctly; `fullPageFinalImage` kept for save flow, cleaned up on window close.
-10. ~~Save URL from session storage~~ — Resolved. URL now passed via port message (`message.url`) instead of session storage. All save parameters (title, url, annotation, mode, sectionId, contentHtml) come from the port message. Only `fullPageFinalImage` and `regionImage_N` keys remain in session storage (too large for port messages).
+10. ~~Save URL from session storage~~ — Resolved. URL passed via port message (`message.url`) instead of session storage. All save parameters come from port messages.
+10a. ~~Image data in session storage~~ — Resolved. Images now flow via chunked port streaming (`saveImage` chunks per port). Session storage holds only HTML metadata (`fullPage*` keys for content HTML/title/URL/contentType).
 11. **Readability bundled in renderer** — Dynamic import pattern added but browserify converts to synchronous require (no code-splitting). True lazy-loading requires bundler upgrade (webpack, rollup, esbuild).
 12. **ES target compatibility** — Project targets old ES version. `String.startsWith()` not available, must use `indexOf`. Silent build failures if modern APIs are used.
 13. **chrome.runtime.sendMessage format** — offscreen.ts does `JSON.parse(message)` on ALL incoming messages. New scripts sending via `chrome.runtime.sendMessage` must use `JSON.stringify(...)` not plain objects.
@@ -371,3 +393,53 @@ Renderer reads `localStorage.locStrings` directly (shared extension origin). Fal
 14. **Renderer telemetry** — Renderer sends funnel events via port `{ action: "telemetry", data: LogDataPackage }`. Worker routes to `this.logger` via `Log.parseAndLogDataPackage()`. Uses imported enums: `Funnel.Label`, `LogMethods`, `Session.EndTrigger`.
 15. **Console output requires flag** — `LogManager.createExtLogger()` returns a `StubSessionLogger` (no-op) unless `enable_console_logging` is `"true"` in localStorage. To enable: open any extension page console (renderer, offscreen) and run `localStorage.setItem("enable_console_logging", "true")`, then reload extension. Logs appear in the **service worker console** (edge://extensions → Inspect service worker), not in the renderer or page console.
 16. **No external telemetry endpoint** — All logging goes to `console.log()` via `ConsoleLoggerDecorator → WebConsole`. No HTTP POST, no Application Insights, no Aria SDK. The decorator pattern allows plugging in a real backend later.
+
+---
+
+## PDF Mode (Implemented)
+
+PDF detected by `contentCaptureInject.ts` (URL `.pdf` suffix, `<embed type="application/pdf">`, or `window.PDFJS`); contentType reported as `"pdf"` via the loadContent message. Renderer enters `pdfMode` and uses `PDFJS.getDocument()` from `pdf.combined.js` (pdfjs-dist v1.7.290) loaded as `<script>` in renderer.html.
+
+- **Mode buttons in PDF mode**: PDF + Region + Bookmark visible (Full Page / Article hidden — not applicable to PDF content).
+- **Preview**: Pages rendered to canvas at scale=2 → data URL → `<img>` lazy-loaded into `preview-container`. Initial 3 pages rendered, ±1 on scroll. Page number overlay top-left of each image. Unselected pages get `opacity: 0.3`.
+- **Page selection**: Radio group (All pages / Page range with validation). Range parser mirrors legacy `StringUtils.parsePageRange` — supports `1-5, 7, 9-12` syntax. Range input is `readonly` when in "All pages" mode (visible muted style); clicking the input auto-switches to "Page range" mode.
+- **Attach PDF**: Checkbox enabled if file ≤24.9MB (`Constants.Settings.maximumMimeSizeLimit`). Auto-disabled with warning when too large.
+- **Distribute pages**: Checkbox creates one OneNote page per PDF page (sequential POSTs). First page gets annotation + citation + optional attachment. Title uses actual page numbers (e.g., "Doc.pdf: Page 3").
+- **Save**: Chunked port streaming — selected pages rendered, sent via `saveImage` chunks; optional `saveAttachment` with binary PDF bytes (base64-encoded data URL).
+- **Bookmark fallback**: PDF pages have no og: tags in their viewer DOM, so `generatePdfBookmarkHtml(title, url)` builds a bookmark card from title + URL.
+- **Telemetry**: `ClipPdfOptions` (PdfAllPagesClipped, PdfAttachmentClipped, PdfIsLocalFile, PdfIsBatched, PdfFileSelectedPageCount, PdfFileTotalPageCount), `PdfByteMetadata` (ByteLength, BytesPerPdfPage), `ClipCommonOptions` (ClipMode=Pdf).
+
+---
+
+## Fluent 2 Redesign (Implemented)
+
+Per designer Figma spec (`wK4ryPaULoiSDMt2xVc1fH`). Replaces the original dark purple sidebar with a Fluent 2 white theme using OneNote brand accents.
+
+### Tokens & palette
+- **Neutral**: `colorNeutralBackground1` (#fff surface), `colorNeutralForeground1` (#242424 primary text), `colorNeutralForeground2` (#424242 labels), `colorNeutralForeground3` (#707070 tertiary), `colorNeutralStroke1` (#d1d1d1 input/button border), `colorNeutralStroke2` (#e0e0e0 divider).
+- **OneNote brand ramp** (from Fluent 2 library `Colors/Brand/OneNote/*`): `oneNoteBrand50` (#5B1382 pressed), `oneNoteBrand60` (#6C179A hover), `oneNoteBrand80` (#7719AA rest). Mapped to `colorCompoundBrandBackground/Hover/Pressed`. Used on Clip button, focus rings, selected mode states.
+- **Spacing**: All paddings aligned to multiples of 4 per Fluent spacing scale (XXL=24, L=16, M=12, S=8, XS=4).
+
+### Component patterns
+- **Mode buttons**: Fluent outline (white bg, 1px neutral border, icon + left-aligned text). Selected = `colorSubtleBackgroundHover` bg + brand-tinted border + brand text + brand-tinted icon (via SVG `currentColor` + CSS filter on `.selected`).
+- **Inputs / textarea / dropdown**: Fluent outline (1px stroke). Focus = 1px purple inset shadow + border-color purple (single 2px purple edge, no doubled border).
+- **Clip button**: Filled primary brand. Focus uses Fluent 2 "halo" pattern (`box-shadow: inset 0 0 0 2px #fff, 0 0 0 2px #242424`) — white inner ring against purple fill, dark outer ring against white sidebar bg.
+- **Cancel button**: Fluent outline secondary.
+- **Section picker**: White Fluent dropdown with chevron SVG. Section list popup with shadow. Headings as collapsible toggles with `arrow_down`/`arrow_right` icons.
+- **Sign-in panel**: White Fluent theme matching sidebar. `aria-modal="true"` on dialog. Brand primary + outline secondary buttons. Focused element gets `colorCompoundBrandBackground` ring.
+- **Article toolbar**: White Fluent (was purple). Highlighter, font toggle, font size buttons use neutral `currentColor` icons; brand-tinted active state.
+- **Region thumbnails**: Natural size (no pixelation per designer spec). 24px gap between captures. **Discard pill above each image** (translucent black 5% bg, trash icon + "Discard" label).
+- **Success/error banners**: Fluent inline alerts (icon + title + description + outline secondary CTA). Success: `colorStatusSuccessForeground1` (#0e700e) checkmark. Error: `colorStatusDangerForeground1` (#c50f1f) circle. No filled green/red banners.
+- **Preview rounded frame**: 20px border-radius (matches Figma `rounded-[20px]`) overlay drawn after capture via `.preview-ready` class. Removed before subsequent captures so the rounded margin doesn't bake into screenshots.
+
+### Typography
+- Header title: Segoe UI Semibold, 20px / line 26px (Subtitle 1)
+- Field labels: Segoe UI Semibold, 12px / line 16px (Caption 1 Strong)
+- Mode button text: Segoe UI Semibold, 14px / line 20px (Body 1 Strong)
+- Clip / Cancel: Segoe UI Semibold, 16px / line 22px (Subtitle 2)
+- Body / placeholder text: Segoe UI Regular, 14px / line 20px (Body 1)
+- Footer email/signout: Segoe UI Regular, 12px / line 16px (Caption 1)
+
+### Header & footer
+- Header: full clipper logo (N + scissors, `onenote_logo_clipper.png`) + "OneNote Web Clipper" title.
+- Footer: avatar/email/signout on **left**, feedback link (or thumb up/down for OrgId) on **right**.
