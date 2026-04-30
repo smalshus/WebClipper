@@ -76,7 +76,16 @@
 	ariaAlert.style.cssText = srOnlyStyle;
 	root.appendChild(ariaAlert);
 
-	document.body.appendChild(root);
+	// Append the overlay to <html> (not <body>) so we can hide the page body
+	// from Voice Access / screen readers without also hiding the overlay.
+	// Voice Access numbers every focusable control on the page; without this,
+	// users see numbers on every link/button behind our crosshair UI.
+	// Mirrors legacy clipperInject.ts pattern (commits d54567b/9fb6f3e/271fb4c).
+	document.documentElement.appendChild(root);
+	let bodyHadAriaHidden = document.body.hasAttribute("aria-hidden");
+	let bodyHadInert = document.body.hasAttribute("inert");
+	if (!bodyHadAriaHidden) { document.body.setAttribute("aria-hidden", "true"); }
+	if (!bodyHadInert) { document.body.setAttribute("inert", ""); }
 	root.focus();
 
 	let ctx = canvas.getContext("2d")!;
@@ -412,6 +421,10 @@
 		document.removeEventListener("keyup", onKeyUp, true);
 		window.removeEventListener("resize", resize);
 		if (root.parentNode) { root.parentNode.removeChild(root); }
+		// Restore body attributes only if we set them ourselves; never strip
+		// pre-existing values that the page may rely on.
+		if (!bodyHadAriaHidden) { document.body.removeAttribute("aria-hidden"); }
+		if (!bodyHadInert) { document.body.removeAttribute("inert"); }
 	}
 
 	// Expose cleanup for external removal
