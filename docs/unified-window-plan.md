@@ -10,11 +10,11 @@ The OneNote Web Clipper previously used two separate UI contexts: an injected if
 
 ### Layout
 ```
-Window width: 1280 (content) + 322 (sidebar) = ~1602px
+Window width: 1280 (content) + 321 (sidebar) = ~1601px
 ┌──────────────────────────────────┬──────────────┐
 │                                  │              │
 │  Content iframe (1280px)         │  Sidebar     │
-│  pointer-events: none            │  (322px)     │
+│  pointer-events: none            │  (321px)     │
 │                                  │              │
 │  During capture: live render     │  Logo        │
 │  (scrolling page)                │  Progress    │
@@ -174,7 +174,7 @@ MESSAGE PROTOCOL (chrome.runtime.sendMessage — JSON strings):
 
 ### Layout
 ```
-Window width: 1280 (content) + 322 (sidebar) = ~1602px
+Window width: 1280 (content) + 321 (sidebar) = ~1601px
 ┌──────────────────────────────────┬──────────────────────┐
 │                                  │ Logo  OneNote Clipper │
 │  content-frame (capture)         │                      │
@@ -443,3 +443,34 @@ Per designer Figma spec (`wK4ryPaULoiSDMt2xVc1fH`). Replaces the original dark p
 ### Header & footer
 - Header: full clipper logo (N + scissors, `onenote_logo_clipper.png`) + "OneNote Web Clipper" title.
 - Footer: avatar/email/signout on **left**, feedback link (or thumb up/down for OrgId) on **right**.
+
+## Reviewer Feedback Round 3 (Implemented)
+
+### Keyboard / focus
+- **Clip button focus indicator after success**: explicit `saveBtn.focus()` after the success banner shows. While save is in flight the button is `disabled`, which drops focus and the `:focus-visible` promotion. A fresh programmatic focus brings both back.
+- **Region Esc with no captures snaps back**: cancelling a fresh region selection returns to the page's default mode (Full Page on web, **PDF Document on PDF pages**) and leaves keyboard focus on the Region mode button so the user can re-enter region mode immediately.
+- **Region overlay Back button reachable**: shadow root mode flipped from `closed` → `open`, `:focus-visible` style added, document-level keydown handler now traps Tab inside the overlay (cycles between root and back-btn), and lets native Enter/Space activate the button when it has focus (would otherwise be eaten by the region-selection start handler).
+- **Section list headings reachable via arrow keys**: shared `focusAdjacentSectionRow` helper walks all visible rows (headings + items, skipping `display:none` collapsed children). Headings activate via Enter/Space (toggle); items via Enter/Space (select).
+- **Preview iframe wrap**: `<iframe id="preview-frame">` is now wrapped in `<div id="preview-frame-wrap" tabindex="0">`. The iframe itself is `tabindex=-1`, so Tab can never traverse into article links/buttons (legacy parity with `editorPreviewComponentBase.makeChildLinksNonTabbable`). Wrapper handles arrow / Page / Home / End keys via JS to scroll `previewFrame.contentWindow`.
+- **Sign-in cancellation silent reset**: worker sends `{success:false, cancelled:true}` (no error string) when MSAL throws on user-cancel; renderer just resets the sign-in panel buttons rather than showing a banner. Matches legacy clipper behavior.
+
+### Visual / Figma alignment
+- **Sidebar width 320 + 1px border = 321px total** (Figma 242:4365). Was 322 with `box-sizing: border-box` (= 321 content). Off by 1px.
+- **Sidebar header padding** `20px 24px 12px` → `24px 24px 12px` (Figma `pt-24`).
+- **Sidebar body padding-top** `4px` → `0` (Figma flush against header divider).
+- **Sidebar group padding** `12px` → `8px` above/below dividers (Figma `py-[8px]`).
+- **Field label margins** `12/4` → `16/8` (16px between fields, 8px label-to-input gap; Figma 242:4396 `gap-[8px]` within block, `gap-[16px]` between blocks).
+- **`#meta-group` flex gap** removed — relies on label margins now.
+- **Mode buttons use inline SVG with `fill="currentColor"`** instead of `<img src=".svg">`. New Fluent UI System Icons (Page Fit, Tab Add, Bookmark, Form). Inline SVG inherits the button's text color, so it tints correctly in normal mode (black/purple) and forced-colors mode (ButtonText/HighlightText) without filter tricks.
+- **Source URL link icon and feedback smiley → inline SVG** with `fill="currentColor"`. URL text moved to `<span id="source-url-text">` so the sibling icon survives `textContent` writes.
+- **PDF mode icon (`pdf.png`)** kept as PNG (no Fluent SVG variant). On the white sidebar the original white-pixel PNG was invisible; `filter: brightness(0)` flips white → black for normal mode, and the legacy purple hue-rotate filter handles selected state.
+
+### Forced-colors hygiene
+- **Single sharp halo** instead of stacked blurred drop-shadows: `drop-shadow(0 0 0 CanvasText)` (was 2× `drop-shadow(0 0 1px CanvasText)` — accumulated blur softened icons).
+- **Mode-button inline SVGs dropped from filter selector** entirely (currentColor handles theming natively); only `<img>`-based icons (PDF mode, section list, article header) still get the halo.
+
+### Preview frame & PDF mode
+- **Focus rings switched from `outline` with `outline-offset: -2px` to outer `box-shadow`** on `#preview-frame-wrap` and `#preview-container`. Inset outlines were getting painted *under* PDF page images (which have `position: relative` + `box-shadow` triggering compositor-layer promotion); outer shadow lives outside the box where children can't reach it.
+- **`#preview-container` adds `overflow-x: hidden`** when `.preview-ready` so absolutely-positioned children (PDF page-number badges) get clipped to the rounded corner.
+- **`#preview-frame-wrap` has `overflow: hidden`** so the iframe inside takes the wrap's rounded corners.
+- **Code blocks in article preview wrap** (`white-space: pre-wrap; overflow-wrap: anywhere; !important`) instead of horizontal-scroll. OneNote doesn't preserve scrollbars in saved pages, so showing one in preview was misleading.

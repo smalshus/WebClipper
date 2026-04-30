@@ -506,7 +506,9 @@ export class WebExtensionWorker extends ExtensionWorkerBase<W3CTab, number> {
 								files: ["contentCaptureInject.js"]
 							});
 						} else {
-							port.postMessage({ action: "signInResult", success: false, error: "Sign-in cancelled" });
+							// Cancellation: no error string. Renderer just resets
+							// the sign-in panel buttons (matches legacy clipper).
+							port.postMessage({ action: "signInResult", success: false, cancelled: true });
 						}
 					}).catch((errorObject: any) => {
 						let errMsg = errorObject.errorDescription || errorObject.error || "Sign-in failed";

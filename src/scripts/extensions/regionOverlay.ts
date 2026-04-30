@@ -27,7 +27,8 @@
 	// Instruction bar — Shadow DOM isolates from page CSS
 	let instrHost = document.createElement("div");
 	instrHost.style.cssText = "position:absolute;top:16px;left:0;right:0;z-index:1;pointer-events:none;";
-	let shadow = instrHost.attachShadow({ mode: "closed" });
+	// Open shadow root so keyboard focus traversal works reliably across browsers.
+	let shadow = instrHost.attachShadow({ mode: "open" });
 	shadow.innerHTML = "<style>"
 		+ ":host { all: initial; }"
 		+ ".wrap { display:flex;justify-content:center; }"
@@ -38,9 +39,10 @@
 		+ ".text { opacity:0.9; }"
 		+ ".back-btn { padding:6px 14px;background:rgba(255,255,255,0.15);color:#fff;"
 		+   "border:1px solid rgba(255,255,255,0.4);border-radius:4px;"
-		+   "font:13px/1 -apple-system,Segoe UI,sans-serif;cursor:pointer;outline:none;"
+		+   "font:13px/1 -apple-system,Segoe UI,sans-serif;cursor:pointer;"
 		+   "transition:background 0.15s; }"
 		+ ".back-btn:hover { background:rgba(255,255,255,0.3); }"
+		+ ".back-btn:focus-visible { outline:2px solid #fff;outline-offset:2px; }"
 		+ "</style>"
 		+ "<div class=\"wrap\"><div class=\"bar\">"
 		+ "<span class=\"text\"></span>"
@@ -305,6 +307,27 @@
 		if (e.key === "Escape") {
 			cleanup();
 			chrome.runtime.sendMessage(JSON.stringify({ action: "regionCancelled" }));
+			return;
+		}
+
+		// Trap Tab focus inside the overlay so the Back/Esc button is the only
+		// stop reachable by keyboard. Without this, Tab walks the underlying
+		// page (which is visually obscured), making the button unreachable.
+		if (e.key === "Tab") {
+			e.preventDefault();
+			let active = shadow.activeElement || document.activeElement;
+			if (active === cancelBtn) {
+				root.focus();
+			} else {
+				cancelBtn.focus();
+			}
+			return;
+		}
+
+		// When focus is on the Back button (in shadow DOM), let native Enter/Space
+		// activate the click handler. Otherwise the document-level capture handler
+		// below would consume Enter and start a region selection instead.
+		if (shadow.activeElement === cancelBtn && (e.key === "Enter" || e.key === " ")) {
 			return;
 		}
 

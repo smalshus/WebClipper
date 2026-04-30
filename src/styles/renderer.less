@@ -55,10 +55,21 @@ body { display: flex; }
 
 	// When ready, add real margin on child panels so content isn't hidden behind the rounded corners
 	&.preview-ready > iframe#content-frame,
-	&.preview-ready > iframe#preview-frame,
+	&.preview-ready > #preview-frame-wrap,
 	&.preview-ready > #preview-container {
 		margin: @preview-inset;
 		border-radius: @preview-radius - 2;
+	}
+	// Only the preview-frame wrap needs overflow:hidden to clip the iframe to
+	// rounded corners. preview-container has its own overflow-y:auto for the
+	// full-page screenshot scroll — keep that, but force overflow-x:hidden so
+	// absolutely-positioned children (PDF page-number badges) get clipped to
+	// the rounded corner instead of escaping the focus ring.
+	&.preview-ready > #preview-frame-wrap {
+		overflow: hidden;
+	}
+	&.preview-ready > #preview-container {
+		overflow-x: hidden;
 	}
 	// Article header gets horizontal + top margin to sit inside the rounded frame
 	&.preview-ready > #article-header {
@@ -67,7 +78,7 @@ body { display: flex; }
 	}
 	// When article header is visible, preview-frame directly below it — no top margin, no top radius
 	&.preview-ready > #article-header + iframe#content-frame,
-	&.preview-ready > #article-header ~ iframe#preview-frame {
+	&.preview-ready > #article-header ~ #preview-frame-wrap {
 		margin-top: 0;
 		border-top-left-radius: 0;
 		border-top-right-radius: 0;
@@ -80,14 +91,36 @@ iframe#content-frame {
 	border: none; display: block; pointer-events: none;
 }
 
-// Preview frame — article/bookmark HTML rendered here
+// Preview frame wrapper — Tab stops here (not on the iframe), so the iframe's
+// internal links/buttons never become tab targets. Wrapper handles arrow-key
+// scrolling explicitly via a JS keydown handler.
+//
+// JS toggles between display:none (hidden) and display:flex (shown). Flex
+// column lets the iframe child grow to fill the wrap; without an explicit
+// height, the iframe defaults to 300×150 (HTML spec default).
+//
+// Focus ring uses outer box-shadow rather than `outline` with negative offset.
+// An inset outline gets painted *inside* the element's box, so child content
+// (article HTML, PDF page images) can paint over it. Outer box-shadow lives
+// outside the box where children can't reach it.
+#preview-frame-wrap {
+	flex: 1; min-width: 0; min-height: 0;
+	display: none;
+	flex-direction: column;
+	&:focus-visible {
+		outline: none;
+		box-shadow: 0 0 0 2px @focusRingColor;
+	}
+}
 iframe#preview-frame {
 	flex: 1; min-width: 0; min-height: 0;
-	border: none; display: none;
+	border: none; display: block;
 	background: #fff;
 }
 
 // Preview area — shown after capture with scrollable image
+// tabindex=0 in HTML makes it Tab-reachable so keyboard users can arrow-scroll.
+// Focus ring uses outer box-shadow (see comment on #preview-frame-wrap above).
 #preview-container {
 	flex: 1; min-width: 0; min-height: 0;
 	overflow-y: auto; display: none;
@@ -98,6 +131,10 @@ iframe#preview-frame {
 	&::-webkit-scrollbar { display: block; width: 6px; }
 	&::-webkit-scrollbar-thumb { background: rgba(0,0,0,0.2); border-radius: 3px; }
 	&::-webkit-scrollbar-track { background: transparent; }
+	&:focus-visible {
+		outline: none;
+		box-shadow: 0 0 0 2px @focusRingColor;
+	}
 }
 
 // Article preview header bar — highlighter, font family, font size controls
@@ -162,8 +199,9 @@ iframe#preview-frame {
 
 // Sidebar panel (white Fluent surface)
 // Separator between preview and sidebar: neutral 1px Fluent divider (matches Figma)
+// Width: 320px content + 1px border = 321px total. Figma 242:4365 specifies 320px.
 #sidebar {
-	width: 322px; flex-shrink: 0; height: 100%;
+	width: 321px; flex-shrink: 0; height: 100%;
 	background: @colorNeutralBackground1; color: @colorNeutralForeground1;
 	display: flex; flex-direction: column;
 	box-sizing: border-box; overflow: hidden;
@@ -171,7 +209,7 @@ iframe#preview-frame {
 }
 
 #sidebar-header {
-	padding: 20px 24px 12px;
+	padding: 24px 24px 12px;
 	display: flex; align-items: center; gap: 8px;
 	img { width: 24px; height: 24px; border-radius: 5px; }
 	.title {
@@ -182,7 +220,7 @@ iframe#preview-frame {
 }
 
 #sidebar-body {
-	flex: 1; padding: 4px 24px 16px;
+	flex: 1; padding: 0 24px 16px;
 	display: flex; flex-direction: column; gap: 0;
 	overflow-y: auto;
 	// Visible scrollbar so user can see there's more content below
@@ -192,10 +230,10 @@ iframe#preview-frame {
 	&::-webkit-scrollbar-track { background: transparent; }
 }
 
-// Sidebar groups — Fluent design uses 1px neutral dividers between sections
-// Matches Figma exactly: @colorNeutralStroke2 (#e0e0e0) per Fluent Divider component
+// Sidebar groups — Fluent design uses 1px neutral dividers between sections.
+// 8px padding above + 8px padding below the divider matches Figma `py-[8px]`.
 .sidebar-group {
-	padding: 12px 0;
+	padding: 8px 0;
 	&:first-child { padding-top: 4px; }
 	& + .sidebar-group {
 		border-top: 1px solid @colorNeutralStroke2;
@@ -228,27 +266,39 @@ iframe#preview-frame {
 		opacity: 0.4; cursor: default;
 		&:hover { background: @colorNeutralBackground1; }
 	}
-	img {
-		width: 20px; height: 20px;
-		// SVG source uses fill="currentColor" — resolves to black (default) in <img> context
+	// Inline SVG icon: fill="currentColor" inherits the button's text color, which
+	// works in both normal mode (black/purple) and forced-colors (ButtonText/
+	// HighlightText). Inline SVG is the most reliable way to theme icons.
+	.mode-icon {
+		width: 20px; height: 20px; flex-shrink: 0;
+		display: block;
 	}
-	&.selected img {
-		// Selected state: tint icons purple to match text color
+	// PDF icon: pdf.png is a white-pixel-on-transparent indexed PNG (designed for
+	// the legacy dark-purple sidebar). On the white Fluent sidebar the white
+	// pixels would be invisible, so brightness(0) flips them to black.
+	// Selected state uses the legacy purple hue-rotate filter to match the
+	// brand color of the selected text/border.
+	.mode-icon-img {
+		width: 20px; height: 20px; flex-shrink: 0;
+		filter: brightness(0);
+	}
+	&.selected .mode-icon-img {
 		filter: brightness(0) saturate(100%) invert(15%) sepia(84%) saturate(4421%) hue-rotate(277deg) brightness(88%) contrast(92%);
 	}
 }
 
-// Metadata fields
+// Metadata fields — rely on label margins for spacing, no extra flex gap
 #meta-group {
-	display: flex; flex-direction: column; gap: 4px;
+	display: flex; flex-direction: column; gap: 0;
 }
 
-// Fluent Caption 1 Strong label — normal case, 12px semibold
+// Fluent Caption 1 Strong label — normal case, 12px semibold.
+// 16px above each label (between fields), 8px between label and its input. Matches Figma 242:4396.
 .field-label {
 	display: block;
 	font-size: 12px; font-weight: 600; line-height: 16px;
 	color: @colorNeutralForeground2;
-	margin-top: 12px; margin-bottom: 4px;
+	margin-top: 16px; margin-bottom: 8px;
 	&:first-child { margin-top: 0; }
 }
 
@@ -275,15 +325,14 @@ iframe#preview-frame {
 .source-url {
 	font-size: 14px; line-height: 20px;
 	color: @colorNeutralForeground3;
-	white-space: nowrap; overflow: hidden;
-	text-overflow: ellipsis;
 	margin-bottom: 2px;
 	display: flex; align-items: center; gap: 4px;
-	// Link icon before text
-	&::before {
-		content: "";
-		display: inline-block; width: 16px; height: 16px; flex-shrink: 0;
-		background: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 16 16'%3E%3Cpath fill='%23707070' d='M6.5 2.5a3 3 0 0 0 0 6h1v-1h-1a2 2 0 0 1 0-4h1v-1zm2 0v1h1a2 2 0 1 1 0 4h-1v1h1a3 3 0 0 0 0-6zm-2 3v1h3v-1z'/%3E%3C/svg%3E") no-repeat center/contain;
+	// Inline SVG link icon — fill="currentColor" tracks the URL text color
+	// (#707070 in normal mode, LinkText/CanvasText in forced-colors).
+	.source-icon { flex-shrink: 0; display: block; }
+	#source-url-text {
+		min-width: 0; flex: 1;
+		white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
 	}
 }
 
@@ -375,6 +424,7 @@ iframe#preview-frame {
 // Button row — Clip (primary purple) and Close (outline), Clip first in tab order
 // Typography: Subtitle 2 (Segoe UI Semibold 16px/22px, weight 600) per Figma 242:4424
 // Padding: 6px 12px (Fluent snudge/m) matches Figma
+// 24px total gap from Location group (8px group padding-bottom + 16px margin-top) matches Figma `gap-[24px]`
 #button-row {
 	display: flex; gap: 8px;
 	margin-top: 16px;
@@ -553,11 +603,18 @@ iframe#preview-frame {
 	&:hover { text-decoration: underline; color: @colorCompoundBrandBackground; }
 }
 
+// inline-flex + align-items:center for deterministic vertical alignment of the
+// SVG icon to the text — vertical-align: middle drifts because it anchors to
+// the text's x-height, not the line center.
+#feedback-link {
+	display: inline-flex; align-items: center; gap: 4px;
+}
+
+// Inline SVG smiley — uses its native 16x16 size from the SVG width/height
+// attributes. fill="currentColor" tracks the icon's color property and falls
+// through to system colors in forced-colors mode.
 .feedback-icon {
-	width: 14px;
-	height: 14px;
-	vertical-align: middle;
-	margin-right: 4px;
+	flex-shrink: 0;
 	color: @colorNeutralForeground3; // #707070 — softer than the text color
 }
 #feedback-link:hover .feedback-icon {
@@ -778,21 +835,23 @@ iframe#preview-frame {
 		}
 	}
 
-	// --- Icons (SVG via filter) — preserve with system-color halo ---
-	.mode-btn img,
+	// Mode-button SVG icons (.mode-icon) inherit currentColor — no filter needed.
+	// PNG/<img>-based icons (PDF mode icon, section list, article header) need
+	// a CanvasText drop-shadow halo because <img> is treated as a bitmap and
+	// doesn't respond to forced-colors.
+	.mode-btn .mode-icon-img,
 	.section-heading img,
 	.section-item img,
-	#article-header button img,
-	.feedback-icon {
+	#article-header button img {
 		forced-color-adjust: none;
-		filter: drop-shadow(0 0 1px CanvasText) drop-shadow(0 0 1px CanvasText) !important;
+		filter: drop-shadow(0 0 0 CanvasText) !important;
 	}
 	// Selected/active items: icon must contrast with Highlight background
-	.mode-btn.selected img,
+	.mode-btn.selected .mode-icon-img,
 	.section-item.section-item-selected img,
 	.section-item:hover img,
 	#article-header button.active img {
-		filter: drop-shadow(0 0 1px HighlightText) drop-shadow(0 0 1px HighlightText) !important;
+		filter: drop-shadow(0 0 0 HighlightText) !important;
 	}
 
 	// --- Input fields ---
@@ -932,7 +991,7 @@ iframe#preview-frame {
 		box-shadow: inset 0 0 0 1px ButtonText !important;
 	}
 	#preview-area.preview-ready > iframe#content-frame,
-	#preview-area.preview-ready > iframe#preview-frame,
+	#preview-area.preview-ready > #preview-frame-wrap,
 	#preview-area.preview-ready > #preview-container {
 		border: 1px solid ButtonText !important;
 	}

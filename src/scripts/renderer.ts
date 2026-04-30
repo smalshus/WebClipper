@@ -39,8 +39,38 @@ window.addEventListener("focus", resetInactivityTimer);
 
 let iframe = document.getElementById("content-frame") as HTMLIFrameElement;
 let previewFrame = document.getElementById("preview-frame") as HTMLIFrameElement;
+// Wrapper around preview-frame is the tab stop and keyboard-scroll target.
+// The iframe itself is tabindex=-1 so Tab can't fall into article links —
+// matching the legacy clipper's div-based preview behavior.
+let previewFrameWrap = document.getElementById("preview-frame-wrap") as HTMLDivElement;
 let previewContainer = document.getElementById("preview-container") as HTMLDivElement;
 let previewArea = document.getElementById("preview-area") as HTMLDivElement;
+
+// Arrow / Page / Home / End scrolling for the article preview iframe — driven
+// from the wrapper div so the iframe's contentDocument never receives focus.
+previewFrameWrap.addEventListener("keydown", function(e) {
+	let win = previewFrame.contentWindow as any;
+	if (!win) { return; }
+	let pageStep = win.innerHeight - 40;
+	let dy = 0;
+	if (e.key === "ArrowDown") {
+		dy = 40;
+	} else if (e.key === "ArrowUp") {
+		dy = -40;
+	} else if (e.key === "PageDown" || e.key === " ") {
+		dy = pageStep;
+	} else if (e.key === "PageUp") {
+		dy = -pageStep;
+	} else if (e.key === "Home") {
+		e.preventDefault(); win.scrollTo(0, 0); return;
+	} else if (e.key === "End") {
+		e.preventDefault(); win.scrollTo(0, win.document.body.scrollHeight); return;
+	} else {
+		return;
+	}
+	e.preventDefault();
+	win.scrollBy(0, dy);
+});
 
 // Show rounded frame overlay on the preview area (applied after capture completes)
 function showPreviewFrame() {
@@ -69,6 +99,9 @@ let capturePanel = document.getElementById("capture-panel") as HTMLDivElement;
 let titleField = document.getElementById("title-field") as HTMLTextAreaElement;
 let noteField = document.getElementById("note-field") as HTMLTextAreaElement;
 let sourceUrl = document.getElementById("source-url") as HTMLDivElement;
+// URL text lives in a child span so the sibling <svg> link icon survives
+// textContent writes. Reads/writes go through this element.
+let sourceUrlText = document.getElementById("source-url-text") as HTMLSpanElement;
 let sectionPicker = document.getElementById("section-picker") as HTMLDivElement;
 let sectionSelected = document.getElementById("section-selected") as HTMLDivElement;
 let sectionListContainer = document.getElementById("section-list-container") as HTMLDivElement;
@@ -85,7 +118,7 @@ let stitchYOffset = 0;
 let stitchDpr = 0;
 let stitchViewportHeight = 0;
 let stitchContentHeight = 0;
-let sidebarCssWidth = 322;
+let sidebarCssWidth = 321; // Matches Figma 242:4365 (320px content + 1px border)
 let contentPixelWidth = 0; // set on first capture, excludes sidebar
 
 let sidebarTitle = document.getElementById("sidebar-title") as HTMLSpanElement;
@@ -349,7 +382,7 @@ try {
 chrome.storage.session.get(["fullPageStatusText", "fullPageTitle", "fullPageUrl"], (stored: any) => {
 	document.title = strings.clipperTitle;
 	if (stored && stored.fullPageTitle) { titleField.value = stored.fullPageTitle; originalTitle = stored.fullPageTitle; }
-	if (stored && stored.fullPageUrl) { sourceUrl.textContent = stored.fullPageUrl; sourceUrl.title = stored.fullPageUrl; }
+	if (stored && stored.fullPageUrl) { sourceUrlText.textContent = stored.fullPageUrl; sourceUrl.title = stored.fullPageUrl; }
 });
 
 // --- Section picker (custom dropdown with scrollable list) ---
@@ -471,10 +504,22 @@ function flattenSectionGroups(groups: any[], parentPath: string, preselectedId: 
 	}
 }
 
+// Walk to the next/previous visible row in the section list.
+// Used by arrow-key handlers on both headings and items.
+function focusAdjacentSectionRow(from: HTMLElement, dir: 1 | -1) {
+	let cur = (dir === 1 ? from.nextElementSibling : from.previousElementSibling) as HTMLElement;
+	while (cur) {
+		if (cur.classList.contains("section-heading") || cur.classList.contains("section-item")) {
+			if (cur.offsetParent) { cur.focus(); return; } // skip collapsed (display:none → offsetParent is undefined)
+		}
+		cur = (dir === 1 ? cur.nextElementSibling : cur.previousElementSibling) as HTMLElement;
+	}
+}
+
 function makeCollapsibleHeading(li: HTMLLIElement, depth: number) {
 	li.setAttribute("data-depth", "" + depth);
-	// Make the heading keyboard-accessible: focusable + role=button for AT to announce action
-	li.setAttribute("tabindex", "-1"); // kept out of Tab order; reachable via arrow-key nav within the listbox
+	// Reachable via arrow-key nav within the listbox; tab order is the dropdown trigger
+	li.setAttribute("tabindex", "-1");
 	li.setAttribute("role", "button");
 	let arrow = document.createElement("img");
 	arrow.className = "collapse-arrow";
@@ -499,7 +544,15 @@ function makeCollapsibleHeading(li: HTMLLIElement, depth: number) {
 	};
 	li.addEventListener("click", toggle);
 	li.addEventListener("keydown", (e) => {
-		if (e.key === "Enter" || e.key === " ") { e.preventDefault(); toggle(); }
+		if (e.key === "Enter" || e.key === " ") {
+			e.preventDefault(); toggle();
+		} else if (e.key === "ArrowDown") {
+			e.preventDefault(); focusAdjacentSectionRow(li, 1);
+		} else if (e.key === "ArrowUp") {
+			e.preventDefault(); focusAdjacentSectionRow(li, -1);
+		} else if (e.key === "Escape") {
+			e.preventDefault(); closeSectionPicker(); sectionSelected.focus();
+		}
 	});
 }
 
@@ -563,25 +616,17 @@ function addSectionItem(id: string, displayName: string, fullPath: string, prese
 		li.setAttribute("aria-selected", "true");
 		selectSection(id, fullPath);
 	});
-	// Keyboard navigation — skip non-clickable headings
+	// Keyboard navigation — arrow keys walk all rows (headings + items),
+	// skipping collapsed ones. Headings are activated via Enter/Space (toggle).
 	li.addEventListener("keydown", (e) => {
 		if (e.key === "ArrowDown") {
-			e.preventDefault();
-			let next = li.nextElementSibling as HTMLElement;
-			while (next && next.classList.contains("section-heading")) { next = next.nextElementSibling as HTMLElement; }
-			if (next) { next.focus(); }
+			e.preventDefault(); focusAdjacentSectionRow(li, 1);
 		} else if (e.key === "ArrowUp") {
-			e.preventDefault();
-			let prev = li.previousElementSibling as HTMLElement;
-			while (prev && prev.classList.contains("section-heading")) { prev = prev.previousElementSibling as HTMLElement; }
-			if (prev) { prev.focus(); }
+			e.preventDefault(); focusAdjacentSectionRow(li, -1);
 		} else if (e.key === "Enter" || e.key === " ") {
-			e.preventDefault();
-			li.click();
+			e.preventDefault(); li.click();
 		} else if (e.key === "Escape") {
-			e.preventDefault();
-			closeSectionPicker();
-			sectionSelected.focus();
+			e.preventDefault(); closeSectionPicker(); sectionSelected.focus();
 		}
 	});
 	sectionList.appendChild(li);
@@ -627,7 +672,7 @@ signoutLink.addEventListener("click", (e) => {
 // --- Feedback link ---
 feedbackLink.addEventListener("click", (e) => {
 	e.preventDefault();
-	safeSend({ action: "openFeedback", pageUrl: sourceUrl.textContent || "" });
+	safeSend({ action: "openFeedback", pageUrl: sourceUrlText.textContent || "" });
 });
 
 // --- Sign-in state detection ---
@@ -871,7 +916,7 @@ function switchToFullPage() {
 	saveArticleWorkingState();
 	resetSaveState();
 	currentMode = "fullpage";
-	previewFrame.style.display = "none";
+	previewFrameWrap.style.display = "none";
 	articleHeader.style.display = "none";
 	if (fullPageComplete) {
 		iframe.style.display = "none";
@@ -901,7 +946,7 @@ function switchToArticle() {
 	previewContainer.style.display = "none";
 	capturePanel.style.display = "none";
 	// Show preview frame and article header
-	previewFrame.style.display = "block";
+	previewFrameWrap.style.display = "flex";
 	articleHeader.style.display = "flex";
 
 	if (!articleLoaded) {
@@ -1022,7 +1067,12 @@ function renderArticleHtml(html: string) {
 		+ "h3, h4, h5, h6 { color: rgb(91,155,213); margin-top: 14pt; margin-bottom: 14pt; }"
 		+ "figure { margin-left: 0; }"
 		+ "pre, code { background: #f5f5f5; padding: 2px 6px; border-radius: 3px; font-size: 14px; }"
-		+ "pre { padding: 12px; overflow-x: auto; }"
+		// Wrap long lines instead of horizontal scroll — OneNote doesn't preserve
+		// scrollbars in saved pages, so showing one in preview is misleading.
+		// !important + overflow-wrap:anywhere defeat inline styles from Readability
+		// output and unbreakable tokens (long URLs, paths) in code samples.
+		+ "pre, pre code { white-space: pre-wrap !important; overflow-wrap: anywhere !important; word-break: break-word !important; overflow-x: hidden !important; }"
+		+ "pre { padding: 12px; }"
 		+ "blockquote { border-left: 3px solid rgb(46,117,181); margin-left: 0; padding-left: 16px; color: #555; }"
 		+ "table { border-collapse: collapse; width: 100%; }"
 		+ "td, th { border: 1px solid #ddd; padding: 8px; }"
@@ -1215,7 +1265,7 @@ function switchToBookmark() {
 	iframe.style.display = "none";
 	previewContainer.style.display = "none";
 	capturePanel.style.display = "none";
-	previewFrame.style.display = "block";
+	previewFrameWrap.style.display = "flex";
 	articleHeader.style.display = "none";
 	if (pdfOptionsPanel) { pdfOptionsPanel.style.display = "none"; }
 
@@ -1257,7 +1307,7 @@ function extractBookmark() {
 
 	// Extract metadata from the content-frame DOM (same sources as BookmarkHelper)
 	let pageTitle = titleField.value || iframeDoc.title || "";
-	let pageUrl = sourceUrl.textContent || "";
+	let pageUrl = sourceUrlText.textContent || "";
 
 	// Description: og:description → meta description → twitter:description → keywords → article:tag → page text
 	// (matches legacy BookmarkHelper fallback chain)
@@ -1452,7 +1502,7 @@ function switchToRegion() {
 	resetSaveState();
 	currentMode = "region";
 	iframe.style.display = "none";
-	previewFrame.style.display = "none";
+	previewFrameWrap.style.display = "none";
 	articleHeader.style.display = "none";
 	if (pdfOptionsPanel) { pdfOptionsPanel.style.display = "none"; }
 	// Keep previewContainer visible (even if empty) so sidebar stays right in flex layout
@@ -1661,7 +1711,7 @@ function switchToPdf() {
 	currentMode = "pdf";
 	// Show preview-container, hide others
 	iframe.style.display = "none";
-	previewFrame.style.display = "none";
+	previewFrameWrap.style.display = "none";
 	articleHeader.style.display = "none";
 	previewContainer.style.display = "block";
 	// Show PDF options panel
@@ -1761,7 +1811,7 @@ function enterPdfMode(url: string) {
 
 	// Show preview container for PDF pages
 	iframe.style.display = "none";
-	previewFrame.style.display = "none";
+	previewFrameWrap.style.display = "none";
 	articleHeader.style.display = "none";
 	previewContainer.style.display = "block";
 	previewContainer.innerHTML = "";
@@ -2049,7 +2099,7 @@ modeButtons.forEach((btn, idx) => {
 		} else if (mode === "bookmark") {
 			// For PDF pages, generate bookmark from title/URL since DOM has no og: tags
 			if (pdfMode && !cachedBookmarkHtml) {
-				cachedBookmarkHtml = generatePdfBookmarkHtml(titleField.value || originalTitle, sourceUrl.textContent || pdfSourceUrl);
+				cachedBookmarkHtml = generatePdfBookmarkHtml(titleField.value || originalTitle, sourceUrlText.textContent || pdfSourceUrl);
 				bookmarkLoaded = true;
 			}
 			switchToBookmark();
@@ -2076,7 +2126,7 @@ port.onMessage.addListener((message: any) => {
 
 			// Populate title and source URL (may not have been available on initial page load)
 			if (stored && stored.fullPageTitle && !titleField.value) { titleField.value = stored.fullPageTitle; }
-			if (stored && stored.fullPageUrl && !sourceUrl.textContent) { sourceUrl.textContent = stored.fullPageUrl; sourceUrl.title = stored.fullPageUrl; }
+			if (stored && stored.fullPageUrl && !sourceUrlText.textContent) { sourceUrlText.textContent = stored.fullPageUrl; sourceUrl.title = stored.fullPageUrl; }
 			if (stored && stored.fullPageTitle) { originalTitle = stored.fullPageTitle; }
 
 			// Local file not allowed — show helpful permission message in preview area
@@ -2534,10 +2584,34 @@ port.onMessage.addListener((message: any) => {
 	}
 
 	if (message.action === "regionCancelled") {
-		// Stay in region mode — user cancelled one selection, not the mode itself.
-		// Show thumbnails (or "Add another region" button if empty).
 		capturePanel.style.display = "none";
-		renderRegionThumbnails();
+		if (regionImages.length === 0) {
+			// Matches legacy clipper behavior: cancelling a fresh region selection
+			// snaps back to the page's default mode — Full Page on web pages,
+			// PDF Document on PDF pages (Full Page mode is hidden in PDF flow).
+			// Focus stays on the Region mode button so the user can re-enter
+			// region mode immediately.
+			let fallbackMode = pdfMode ? "pdf" : "fullpage";
+			document.querySelectorAll(".mode-btn").forEach((b) => {
+				b.classList.remove("selected");
+				b.setAttribute("aria-pressed", "false");
+			});
+			let fallbackBtn = document.querySelector('.mode-btn[data-mode="' + fallbackMode + '"]');
+			if (fallbackBtn) { fallbackBtn.classList.add("selected"); fallbackBtn.setAttribute("aria-pressed", "true"); }
+			if (pdfMode) {
+				switchToPdf();
+				setTelemetryContext(Context.Custom.ContentType, "Pdf");
+			} else {
+				switchToFullPage();
+				setTelemetryContext(Context.Custom.ContentType, "FullPage");
+			}
+			let regionBtn = document.querySelector('.mode-btn[data-mode="region"]') as HTMLElement;
+			if (regionBtn) { setTimeout(function() { regionBtn.focus(); }, 0); }
+		} else {
+			// User cancelled mid-add but already has captures — stay in region mode
+			// so they can save what they have or add another region.
+			renderRegionThumbnails();
+		}
 	}
 
 	if (message.action === "saveProgress") {
@@ -2604,6 +2678,10 @@ port.onMessage.addListener((message: any) => {
 			}
 			successBanner.style.display = "block";
 			// role="status" on successBanner auto-announces; no manual aria-live needed
+			// Restore focus + visible indicator on Clip button. While save was in flight the
+			// button was disabled, which drops focus and the :focus-visible promotion. A fresh
+			// programmatic focus brings both back so keyboard users see where they are.
+			setTimeout(function() { saveBtn.focus(); }, 0);
 		} else {
 			unlockSidebar();
 			let errorDetail = message.error || "Unknown error";
@@ -2713,7 +2791,16 @@ port.onMessage.addListener((message: any) => {
 			if (message.error) { signInEvent.setFailureInfo({ error: message.error }); }
 			logTelemetryEvent(signInEvent);
 			logFunnel(Funnel.Label.AuthSignInFailed);
-			showSignInError(message.error || loc("WebClipper.Error.SignInUnsuccessful", "Sign-in failed. Please try again."));
+			if (message.cancelled) {
+				// User-initiated cancellation: legacy clipper showed no banner here.
+				// Just reset the sign-in panel buttons so they can try again.
+				signinMsaBtn.disabled = false;
+				signinOrgIdBtn.disabled = false;
+				signinProgress.style.display = "none";
+				signinError.style.display = "none";
+			} else {
+				showSignInError(message.error || loc("WebClipper.Error.SignInUnsuccessful", "Sign-in failed. Please try again."));
+			}
 		}
 	}
 
@@ -2754,14 +2841,14 @@ port.onMessage.addListener((message: any) => {
 		// Reset metadata fields
 		titleField.value = "";
 		noteField.value = "";
-		sourceUrl.textContent = "";
+		sourceUrlText.textContent = "";
 		sourceUrl.title = "";
 		// Clear stale capture content from DOM
 		hidePreviewFrame(); // remove rounded frame so next capture isn't masked
 		previewContainer.innerHTML = "";
 		previewContainer.style.display = "none";
 		iframe.style.display = "none";
-		previewFrame.style.display = "none";
+		previewFrameWrap.style.display = "none";
 		capturePanel.style.display = "none";
 		// Reset mode buttons to initial state (disabled until capture completes)
 		document.querySelectorAll(".mode-btn").forEach((b) => {
@@ -2812,7 +2899,7 @@ saveBtn.addEventListener("click", () => {
 		let pdfOptEvent = new Event.BaseEvent(Event.Label.ClipPdfOptions);
 		pdfOptEvent.setCustomProperty(PropertyName.Custom.PdfAllPagesClipped, pdfAllPages);
 		pdfOptEvent.setCustomProperty(PropertyName.Custom.PdfAttachmentClipped, pdfAttach && pdfByteLength <= pdfMaxAttachSize);
-		pdfOptEvent.setCustomProperty(PropertyName.Custom.PdfIsLocalFile, (sourceUrl.textContent || "").indexOf("file:///") === 0);
+		pdfOptEvent.setCustomProperty(PropertyName.Custom.PdfIsLocalFile, (sourceUrlText.textContent || "").indexOf("file:///") === 0);
 		pdfOptEvent.setCustomProperty(PropertyName.Custom.PdfIsBatched, pdfDistribute);
 		let selectedCount = pdfAllPages ? pdfPageCount : getPdfSelectedIndices().length;
 		pdfOptEvent.setCustomProperty(PropertyName.Custom.PdfFileSelectedPageCount, selectedCount);
@@ -2853,7 +2940,7 @@ saveBtn.addEventListener("click", () => {
 		action: "save",
 		title: titleField.value,
 		annotation: noteField.value,
-		url: sourceUrl.textContent || "",
+		url: sourceUrlText.textContent || "",
 		mode: currentMode,
 		sectionId: selectedSectionId
 	};
@@ -2940,7 +3027,7 @@ saveBtn.addEventListener("click", () => {
 			saveMsg.pdfPageCount = dataUrls.length;
 			saveMsg.pdfAttach = !!wantAttach;
 			saveMsg.pdfDistribute = pdfDistribute;
-			saveMsg.pdfAttachName = getPdfFileName(sourceUrl.textContent || pdfSourceUrl);
+			saveMsg.pdfAttachName = getPdfFileName(sourceUrlText.textContent || pdfSourceUrl);
 			saveMsg.pdfTotalPages = pdfPageCount;
 			saveMsg.pageLabel = strings.page;
 			saveMsg.pdfPageNumbers = indices.map(function(idx) { return idx + 1; });
