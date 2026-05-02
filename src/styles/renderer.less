@@ -206,6 +206,15 @@ iframe#preview-frame {
 	display: flex; flex-direction: column;
 	box-sizing: border-box; overflow: hidden;
 	border-left: 1px solid @colorNeutralStroke2;
+	// The sidebar is a control surface, not reading material. Caret browsing
+	// (F7) and some accessibility tools blink a text caret on every focused
+	// element including buttons and read-only displays, which looks wrong.
+	// Hide the caret blanket; restore in actual editable fields below.
+	caret-color: transparent;
+}
+#sidebar input,
+#sidebar textarea {
+	caret-color: auto;
 }
 
 #sidebar-header {
@@ -349,6 +358,9 @@ iframe#preview-frame {
 	border: 1px solid @colorNeutralStroke1; border-radius: 4px;
 	padding: 4px 28px 4px 12px; font-size: 14px; line-height: 20px; font-family: inherit;
 	cursor: pointer;
+	// Combobox click target — disable text selection so double-click doesn't
+	// highlight the section path text. Caret hiding handled by #sidebar above.
+	user-select: none;
 	white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
 	// Chevron down arrow
 	background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath d='M2.5 4.5l3.5 3.5 3.5-3.5' stroke='%23424242' stroke-width='1.2' fill='none' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
