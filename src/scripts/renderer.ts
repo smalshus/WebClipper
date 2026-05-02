@@ -204,7 +204,7 @@ function announceToScreenReader(text: string) {
 }
 
 let strings = {
-	clipperTitle: loc("WebClipper.Label.OneNoteWebClipper", "OneNote Web Clipper"),
+	clipperTitle: "OneNote Web Clipper",
 	capturing: "", // no heading — progressInfo shows viewport progress directly
 	cancel: loc("WebClipper.Action.Cancel", "Cancel"),
 	close: loc("WebClipper.Action.CloseTheClipper", "Close"),
@@ -221,7 +221,7 @@ let strings = {
 	sourceLabel: loc("WebClipper.Label.Source", "Source"),
 	signOut: loc("WebClipper.Action.SignOut", "Sign out"),
 	feedback: loc("WebClipper.Action.Feedback", "Feedback"),
-	toggleHighlighter: loc("WebClipper.Accessibility.ScreenReader.ToggleHighlighterModeForArticle", "Toggle highlighter"),
+	toggleHighlighter: loc("WebClipper.Accessibility.ScreenReader.ToggleHighlighterForArticleMode", "Toggle highlighter"),
 	changeFontSansSerif: loc("WebClipper.Accessibility.ScreenReader.ChangeFontToSansSerif", "Change font to Sans-Serif"),
 	changeFontSerif: loc("WebClipper.Accessibility.ScreenReader.ChangeFontToSerif", "Change font to Serif"),
 	decreaseFontSize: loc("WebClipper.Accessibility.ScreenReader.DecreaseFontSize", "Decrease font size"),
@@ -233,7 +233,7 @@ let strings = {
 	// PDF strings
 	modePdf: loc("WebClipper.ClipType.Pdf.Button", "PDF"),
 	pdfAllPages: loc("WebClipper.Label.PdfAllPagesRadioButton", "All pages"),
-	pdfPageRange: loc("WebClipper.Label.PdfPageRange", "Page range"),
+	pdfPageRange: loc("WebClipper.Preview.Header.PdfPageRangeRadioButtonLabel", "Page range"),
 	pdfAttachFile: loc("WebClipper.Label.AttachPdfFile", "Attach PDF file"),
 	pdfAttachSubtext: loc("WebClipper.Label.AttachPdfFileSubText", "(all pages)"),
 	pdfTooLarge: loc("WebClipper.Label.PdfTooLargeToAttach", "PDF too large to attach"),
@@ -2699,9 +2699,9 @@ port.onMessage.addListener((message: any) => {
 			let errorDetailText = document.getElementById("error-detail-text") as HTMLPreElement;
 			let errorSummary = errorDetails.querySelector("summary") as HTMLElement;
 
-			errorTitle.textContent = loc("WebClipper.Label.ClipErrorTitle", "Couldn\u2019t save to your notebook");
+			errorTitle.textContent = loc("WebClipper.Label.ClipErrorTitle", "Couldn't save to your notebook");
 			errorDescription.textContent = loc("WebClipper.Label.ClipErrorDescription",
-				"Something went wrong while saving your clip. Try saving your clip again");
+				"Something went wrong while saving your clip. Try saving your clip again.");
 			if (errorDetail && errorDetail !== "Unknown error") {
 				errorSummary.textContent = loc("WebClipper.Label.SignInUnsuccessfulMoreInformation", "More information");
 				errorDetailText.textContent = errorDetail;
