@@ -10,10 +10,10 @@ The OneNote Web Clipper previously used two separate UI contexts: an injected if
 
 ### Layout
 ```
-Window width: 1280 (content) + 321 (sidebar) = ~1601px
+Window width: 1024 (content) + 321 (sidebar) = 1345px
 ┌──────────────────────────────────┬──────────────┐
 │                                  │              │
-│  Content iframe (1280px)         │  Sidebar     │
+│  Content iframe (1024px)         │  Sidebar     │
 │  pointer-events: none            │  (321px)     │
 │                                  │              │
 │  During capture: live render     │  Logo        │
@@ -174,7 +174,7 @@ MESSAGE PROTOCOL (chrome.runtime.sendMessage — JSON strings):
 
 ### Layout
 ```
-Window width: 1280 (content) + 321 (sidebar) = ~1601px
+Window width: 1024 (content) + 321 (sidebar) = 1345px
 ┌──────────────────────────────────┬──────────────────────┐
 │                                  │ Logo  OneNote Clipper │
 │  content-frame (capture)         │                      │
@@ -278,7 +278,7 @@ Renderer reads `localStorage.locStrings` directly (shared extension origin). Fal
 - **Duplicate prevention**: `closeAllFramesAndInvokeClipper` override checks `activeRendererWindowId`
 - **Tab navigation**: `tabs.onUpdated` listener closes renderer when source tab URL changes
 - **Focus retention**: `blur` handler re-focuses renderer (disabled after save and during region capture)
-- **Resize**: locked during capture (2px macOS tolerance, `resizing` guard flag), unlocked after via `showPreviewFrame()`. Post-capture min 1000x600 enforced via `chrome.windows.update`. Worker creation: content width capped at min(browserWidth, 1280), total clamped to max(browserWidth, 1000), height clamped to browserHeight − 32px.
+- **Resize**: locked during capture (2px macOS tolerance, `resizing` guard flag), unlocked after via `showPreviewFrame()`. Post-capture min 1000x600 enforced via `chrome.windows.update`. Worker creation: content width capped at min(browserWidth, 1024), total clamped to max(browserWidth, 1000), height clamped to min(browserHeight − 32px, 900) and floored at 600.
 - **Service worker keepalive**: 25s ping from renderer prevents MV3 SW suspension
 - **Inactivity auto-close**: 5-min timer, reset on user input
 - **Save timeout**: 30s client-side timeout (SW `setTimeout` unreliable); scales with PDF page count (30s + 5s/page)
@@ -366,7 +366,7 @@ Renderer reads `localStorage.locStrings` directly (shared extension origin). Fal
 ## Known Limitations
 
 ### Capture Quality
-1. **Viewport width vs responsive breakpoints** — Content-frame renders at 1280px. Most sites (including MS Learn at 1088px breakpoint) render correctly, but sites with breakpoints above 1280px may lose sidebars or switch to mobile layout. CSS `zoom` doesn't affect media queries. Widening the cap is possible but creates wider images. A future approach could capture at the original tab viewport width and scale on save.
+1. **Viewport width vs responsive breakpoints** — Content-frame renders at up to 1024px (capped from browser width; narrower browsers shrink content to ≥679px). Sites with desktop breakpoints between 1024 and ~1280 (e.g., some MS Learn navs) may render their tablet/mobile layout in our captures. CSS `zoom` doesn't affect media queries. Lowered from 1280 to keep the popup from covering most of the screen on large monitors. A future approach could capture at the original tab viewport width and scale on save.
 2. ~~Sticky element duplication~~ — Resolved. Position neutralization (`sticky → relative`, `fixed → absolute`) now uses `!important` via `setProperty()` in both `contentCaptureInject.ts` and `renderer.ts`, beating CSS utility classes like `.position-sticky{position:sticky!important}`. Hidden duplicate elements (e.g., MS Learn collapsible TOC) handled by `inlineHiddenElements` + `[hidden]{display:none!important}` CSS override.
 3. ~~Bottom void on grid-layout sites~~ — Resolved. Canvas is trimmed to `stitchYOffset` (actual pixels drawn) during finalize, removing any trailing blank space.
 4. **Right-edge clipping** — Pages with 0 margins may get content cut off at the right edge.

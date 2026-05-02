@@ -49,7 +49,7 @@ This document tracks the experiment to remove server-side dependencies from the 
 The server-side approach used Puppeteer to render sanitized HTML and produce a full-page screenshot. The client-side replacement mirrors this:
 
 1. **Store HTML in `chrome.storage.session`** — The page's HTML content, base URL, and localized status text are written to session storage (avoids JSON serialization bottleneck with large payloads)
-2. **Open a renderer popup window** — An extension page (`renderer.html`) is opened at the same position/size as the user's browser with `focused: true`. Width is capped at 1280px. Zoom is forced to 100% via `chrome.tabs.setZoom`. Title bar shows localized "Clipping Page" status text
+2. **Open a renderer popup window** — An extension page (`renderer.html`) is opened at the same position/size as the user's browser with `focused: true`. Content width is capped at 1024px (popup fits comfortably on most monitors); height is capped at 900px and floored at 600px. Zoom is forced to 100% via `chrome.tabs.setZoom`. Title bar shows localized "Clipping Page" status text
 3. **Port-based communication** — The renderer page connects to the service worker via `chrome.runtime.connect({ name: "renderer" })`. Commands (loadContent, scroll) are exchanged over this port
 4. **Renderer loads content** — Reads HTML from `chrome.storage.session`, strips `<script>` tags, preserves `<style>`, `<link rel="stylesheet">`, and `<meta>` tags. Rewrites relative URLs (images, stylesheets, srcset) to absolute using `new URL(relative, baseUrl)` (CSP blocks `<base href>` on extension pages). Fetches external stylesheets via `fetch()` and inlines as `<style>` blocks. Renders content inside an iframe for CSS isolation. Injects `[hidden]{display:none!important}` to enforce HTML hidden attribute. Neutralizes fixed/sticky positioning with `!important` after stylesheets load. User interaction blocked by transparent overlay div (`#interaction-shield`) + keyboard/wheel JS listeners
 5. **Scroll-capture with incremental stitching** — The service worker tells the renderer to scroll to each viewport position, waits 500ms (Chrome's `MAX_CAPTURE_VISIBLE_TAB_CALLS_PER_SECOND` rate limit = 2/sec), then calls `captureVisibleTab()` to take a PNG screenshot (lossless). Each capture is sent back to the renderer via port for immediate drawing onto a hidden canvas (`display:none`, invisible to captureVisibleTab). Scroll stall detection stops capture when `scrollY` stops changing. Canvas height capped at pre-conversion `contentHeight` or 16,384px
@@ -175,7 +175,7 @@ User clicks Clip
 | `chrome.storage.session` for HTML/metadata only | Used for content HTML + page metadata (title, URL, contentType). Image data is now sent via chunked port streaming, not session storage |
 | Chunked port streaming for save | Per-port `saveImage` chunks (one message per image) accumulate in worker. Multi-window safe (per-port isolation). Bypasses 10MB session storage quota. Used for full-page screenshot, region thumbnails, and PDF page images |
 | Port-based messaging (`runtime.connect`) | `scripting.executeScript` blocked on extension pages in MV3 |
-| PNG capture, JPEG 95% final output, 1280px width cap | PNG captures are lossless; single JPEG encode at finalize; no double compression; 1280px balances fidelity vs size |
+| PNG capture, JPEG 95% final output, 1024px width cap | PNG captures are lossless; single JPEG encode at finalize; no double compression; 1024px balances fidelity vs popup footprint |
 | Renderer-side incremental stitching | Each PNG capture sent to renderer via port (~1-3MB each, within port limits), drawn onto hidden canvas immediately; final JPEG cached in `fullPageDataUrl` page variable, sent to worker only at save time |
 | Scroll stall detection | Stops capturing when `scrollY` doesn't change between captures; handles inflated `scrollHeight` from fixed→absolute conversion |
 | Content height cropping | Measures `scrollHeight` before position conversions; uses pre-conversion height to cap canvas, trimming blank space |
@@ -215,7 +215,7 @@ User clicks Clip
 - Very long pages get bottom truncated; OneNote API would likely reject larger images anyway
 
 ### 4. Right-Edge Content
-- Renderer width capped at 1280px; wider content reflows via CSS overrides (`max-width: 100%` on images/tables, `pre-wrap` on code)
+- Renderer width capped at 1024px; wider content reflows via CSS overrides (`max-width: 100%` on images/tables, `pre-wrap` on code)
 - Some layouts with explicit pixel widths may still clip
 - CDP approach would allow `captureBeyondViewport` for true full-width capture
 
@@ -267,7 +267,7 @@ After the V3 self-contained architecture stabilized, additional work brought the
 - Typography: Segoe UI Variable. All paddings aligned to multiples of 4 (Fluent spacing scale).
 
 ### Reliability / lifecycle
-- **Window resize** — locked during capture (2px macOS tolerance, `resizing` guard); unlocked after via `showPreviewFrame()`. Post-capture min 1000x600 enforced via `chrome.windows.update`. Worker creation: content width capped at min(browserWidth, 1280), total clamped to max(browserWidth, 1000), height clamped to browserHeight−32px.
+- **Window resize** — locked during capture (2px macOS tolerance, `resizing` guard); unlocked after via `showPreviewFrame()`. Post-capture min 1000x600 enforced via `chrome.windows.update`. Worker creation: content width capped at min(browserWidth, 1024), total clamped to max(browserWidth, 1000), height clamped to min(browserHeight−32px, 900) and floored at 600.
 - **Service worker keepalive** — 25s ping from renderer prevents MV3 SW suspension.
 - **Inactivity auto-close** — 5-min timer, reset on user input.
 - **Save timeout** — 30s client-side timeout (SW `setTimeout` unreliable); scales with PDF page count (30s + 5s/page).
