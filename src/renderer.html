@@ -124,15 +124,9 @@
 				<span id="error-title" class="status-title"></span>
 			</div>
 			<p id="error-description" class="status-description"></p>
-			<details id="error-details" style="display:none;">
-				<summary></summary>
-				<div class="error-detail-wrap">
-					<pre id="error-detail-text"></pre>
-					<button id="copy-diagnostics" type="button" title="Copy" aria-label="Copy diagnostic information">
-						<span aria-hidden="true">&#x1F4CB;</span>
-					</button>
-				</div>
-			</details>
+			<button id="copy-diagnostics" type="button" style="display:none;" aria-label="Copy diagnostic information">
+				<span class="copy-icon" aria-hidden="true">&#x1F4CB;</span><span id="copy-diagnostics-label">Copy diagnostic info</span>
+			</button>
 		</div>
 		<div id="capture-panel">
 			<div id="status-text"></div>

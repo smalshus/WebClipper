@@ -414,7 +414,23 @@ function toggleSectionPicker() {
 	}
 }
 
+// position:fixed dropdown so it doesn't expand #sidebar-body's scrollHeight.
+// Compute top/left/width from #section-selected's bounding rect each time the
+// dropdown opens (rect changes on resize/scroll). Dynamically shrink max-height
+// so the dropdown always fits between the trigger and the viewport bottom.
+function positionSectionDropdown() {
+	let rect = sectionSelected.getBoundingClientRect();
+	let viewportHeight = window.innerHeight;
+	let availableBelow = viewportHeight - rect.bottom - 8; // 8px viewport bottom margin
+	let dropdownHeight = Math.max(120, Math.min(240, availableBelow));
+	sectionListContainer.style.top = (rect.bottom + 2) + "px";
+	sectionListContainer.style.left = rect.left + "px";
+	sectionListContainer.style.width = rect.width + "px";
+	sectionListContainer.style.maxHeight = dropdownHeight + "px";
+}
+
 function openSectionPicker() {
+	positionSectionDropdown();
 	sectionListContainer.style.display = "block";
 	sectionPickerOpen = true;
 	sectionSelected.setAttribute("aria-expanded", "true");
@@ -427,6 +443,19 @@ function closeSectionPicker() {
 	sectionListContainer.style.display = "none";
 	sectionPickerOpen = false;
 	sectionSelected.setAttribute("aria-expanded", "false");
+}
+
+// Reposition or close on viewport changes so the fixed dropdown doesn't drift.
+window.addEventListener("resize", () => {
+	if (sectionPickerOpen) { positionSectionDropdown(); }
+});
+// Close on sidebar scroll — the trigger moves but the fixed dropdown wouldn't,
+// leaving them visually disconnected. Simpler to close than to reposition.
+let sidebarBodyEl = document.getElementById("sidebar-body") as HTMLDivElement;
+if (sidebarBodyEl) {
+	sidebarBodyEl.addEventListener("scroll", () => {
+		if (sectionPickerOpen) { closeSectionPicker(); }
+	});
 }
 
 sectionSelected.addEventListener("click", () => {
@@ -1061,7 +1090,13 @@ function renderArticleHtml(html: string) {
 	let articleCss = "body { font-family: " + fontFamily + ", 'Segoe UI', sans-serif; font-size: " + fontSize + "; line-height: 1.6; "
 		+ "max-width: 624px; margin: 24px 0; padding: 0 20px; color: #1a1a1a; margin-bottom: 16px; }"
 		+ "img { max-width: 100%; height: auto; }"
-		+ "a { color: #2e75b5; text-decoration: underline; }"
+		// pointer-events:none + cursor:default prevent click navigation in the
+		// preview iframe (matches bookmark mode). Without this, clicking a link
+		// in the rendered article navigates the iframe away from the captured
+		// content, breaking save/highlight flows. Text selection still works
+		// because the selection range covers the link without the link itself
+		// receiving the mouse event.
+		+ "a { color: #2e75b5; text-decoration: underline; pointer-events: none; cursor: default; }"
 		+ "::-webkit-scrollbar{width:6px} ::-webkit-scrollbar-thumb{background:rgba(0,0,0,0.2);border-radius:3px} ::-webkit-scrollbar-track{background:transparent}"
 		+ "h2 { font-size: 18px; color: rgb(46,117,181); }"
 		+ "h3, h4, h5, h6 { color: rgb(91,155,213); margin-top: 14pt; margin-bottom: 14pt; }"
@@ -2695,36 +2730,30 @@ port.onMessage.addListener((message: any) => {
 			let errorBanner = document.getElementById("error-banner") as HTMLDivElement;
 			let errorTitle = document.getElementById("error-title") as HTMLSpanElement;
 			let errorDescription = document.getElementById("error-description") as HTMLParagraphElement;
-			let errorDetails = document.getElementById("error-details") as HTMLDetailsElement;
-			let errorDetailText = document.getElementById("error-detail-text") as HTMLPreElement;
-			let errorSummary = errorDetails.querySelector("summary") as HTMLElement;
+			let copyBtn = document.getElementById("copy-diagnostics") as HTMLButtonElement;
+			let copyLabel = document.getElementById("copy-diagnostics-label") as HTMLSpanElement;
 
 			errorTitle.textContent = loc("WebClipper.Label.ClipErrorTitle", "Couldn't save to your notebook");
 			errorDescription.textContent = loc("WebClipper.Label.ClipErrorDescription",
 				"Something went wrong while saving your clip. Try saving your clip again.");
 			if (errorDetail && errorDetail !== "Unknown error") {
-				errorSummary.textContent = loc("WebClipper.Label.SignInUnsuccessfulMoreInformation", "More information");
-				errorDetailText.textContent = errorDetail;
-				errorDetails.style.display = "block";
-				// Wire up the copy button — keyboard users can't select text from <pre> easily,
-				// so this button is critical for a11y
-				let copyBtn = document.getElementById("copy-diagnostics") as HTMLButtonElement;
-				if (copyBtn) {
-					copyBtn.onclick = function(ev) {
-						ev.stopPropagation();
-						navigator.clipboard.writeText(errorDetailText.textContent || "").then(function() {
-							let orig = copyBtn.innerHTML;
-							copyBtn.innerHTML = "<span aria-hidden=\"true\">\u2713</span>";
-							copyBtn.classList.add("copied");
-							setTimeout(function() {
-								copyBtn.innerHTML = orig;
-								copyBtn.classList.remove("copied");
-							}, 1500);
-						});
-					};
-				}
-			} else {
-				errorDetails.style.display = "none";
+				let copyLabelText = "Copy diagnostic info";
+				copyLabel.textContent = copyLabelText;
+				copyBtn.style.display = "";
+				copyBtn.onclick = function(ev) {
+					ev.stopPropagation();
+					navigator.clipboard.writeText(errorDetail).then(function() {
+						copyLabel.textContent = "✓ Copied";
+						copyBtn.classList.add("copied");
+						setTimeout(function() {
+							copyLabel.textContent = copyLabelText;
+							copyBtn.classList.remove("copied");
+						}, 1500);
+					});
+				};
+			} else if (copyBtn) {
+				copyBtn.style.display = "none";
+				copyBtn.onclick = undefined;
 			}
 			errorBanner.style.display = "block";
 			// role="alert" on errorBanner auto-announces; no manual aria-live needed
