@@ -23,17 +23,6 @@
         "all_frames": true
       }
     ],
-    "web_accessible_resources": [
-      {
-        "resources": [
-          "clipper.html",
-          "pageNav.html"
-        ],
-        "matches": [
-          "<all_urls>"
-        ]
-      }
-    ],
     "permissions": [
       "activeTab",
       "scripting",
