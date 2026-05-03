@@ -290,3 +290,13 @@ npm run build          # Compiles TS, bundles, exports to /target
 Load the extension from `target/edge/OneNoteWebClipper/edgeextension/manifest/extension/` (Edge) or `target/chrome` (Chrome).
 
 Gulp tasks: `bundleRenderer` (renderer.ts), `bundleRegionOverlay` (regionOverlay.ts), `bundleContentCaptureInject` (contentCaptureInject.ts) — all compiled and deployed to Chrome/Edge targets.
+
+---
+
+## V1 cleanup
+
+V3 is now the only shipping path, so the V1 architecture (Mithril sidebar +
+iframe-based inject pattern) and the unused Safari / Firefox extension
+targets have been removed from the source tree to slim the build and
+reduce maintenance surface. `src/strings.json` is also trimmed to only
+the keys referenced by the V3 surface.

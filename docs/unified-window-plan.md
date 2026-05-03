@@ -56,6 +56,11 @@ Window width: 1024 (content) + 321 (sidebar) = 1345px
 - No Mithril.js — plain HTML/TS sidebar with port messages to the worker
 - **Self-contained extraction** — Readability and bookmark metadata extracted directly in renderer from content-frame DOM, no round-trip to worker/clipper.tsx
 
+> **V1 removed.** With V3 the only shipping path, the V1 architecture
+> (`clipperInject.ts`, `clipper.tsx`, the `clipperUI/` Mithril sidebar
+> tree) and the unused Safari/Firefox targets have been deleted from
+> the source tree.
+
 ### Flow (Current)
 
 **No clipperInject.ts injection. No Mithril sidebar. Everything in the renderer window.**
