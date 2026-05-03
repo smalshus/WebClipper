@@ -258,6 +258,24 @@ gulp.task("bundleRenderer", function () {
     return merge(tasks);
 });
 
+gulp.task("bundleLogManager", function () {
+    var defaultLogManager = browserify(PATHS.BUILDROOT + "scripts/logging/logManager.js", { standalone: "LogManager" })
+        .bundle()
+        .pipe(source("logManager.js"))
+        .pipe(gulp.dest(PATHS.BUNDLEROOT));
+
+    if (fileExists(PATHS.BUILDROOT + "scripts/logging/logManager_internal.js") && !argv.nointernal) {
+        var internalLogManager = browserify(PATHS.BUILDROOT + "scripts/logging/logManager_internal.js", { standalone: "LogManager" })
+            .bundle()
+            .pipe(source("logManager_internal.js"))
+            .pipe(gulp.dest(PATHS.BUNDLEROOT));
+
+        return merge(defaultLogManager, internalLogManager);
+    }
+
+    return defaultLogManager;
+});
+
 gulp.task("bundleChrome", function() {
     var extensionRoot = PATHS.BUILDROOT + "scripts/extensions/chrome/";
     var files = ["chromeExtension.js"];
@@ -279,6 +297,7 @@ gulp.task("bundle", function(callback) {
         "bundleRegionOverlay",
         "bundleContentCaptureInject",
         "bundleRenderer",
+        "bundleLogManager",
         "bundleChrome",
         "bundleEdge",
         callback);
@@ -316,11 +335,28 @@ targetDirHasExportedCommonJs[PATHS.TARGET.CHROME] = false;
 targetDirHasExportedCommonJs[PATHS.TARGET.EDGE_EXTENSION] = false;
 function exportCommonJS(targetDir) {
     if (!targetDirHasExportedCommonJs[targetDir]) {
-        // V3 bundles (chromeExtension/edgeExtension/renderer/contentCaptureInject/
-        // regionOverlay/offscreen) are concatenated into the per-browser
-        // exportChromeJS/exportEdgeJS tasks. The only common JS we still
-        // export here is the oneNoteApi runtime, which the worker uses for
-        // multipart construction.
+        // logManager.js is bundled standalone (browserify { standalone:
+        // "LogManager" }) so the global LogManager is available to other
+        // bundles (extensionWorkerBase calls LogManager.createExtLogger,
+        // authenticationHelper calls LogManager.reInitLoggerForDataBoundary
+        // Change). The internal variant is used when the WebClipper_Internal
+        // sibling project is present and --nointernal is not passed; it
+        // bundles the Aria/MSIT telemetry shim. Otherwise the public stub
+        // logManager.js ships.
+        var logManagerExportTask;
+        if (fileExists(PATHS.BUNDLEROOT + "logManager_internal.js") && !argv.nointernal) {
+            var ariaFileName = "aria-web-telemetry-";
+            var unminifiedAriaLibraryFileName = ariaFileName + ARIA_LIB_VERSION + ".js";
+            var minifiedAriaLibraryFileName = ariaFileName + ARIA_LIB_VERSION + ".min.js";
+            var ariaLibToInclude = argv.nominify ? unminifiedAriaLibraryFileName : minifiedAriaLibraryFileName;
+            logManagerExportTask = gulp.src([
+                PATHS.INTERNAL.LIBROOT + ariaLibToInclude,
+                PATHS.BUNDLEROOT + "logManager_internal.js"
+            ]).pipe(concat("logManager.js")).pipe(gulp.dest(targetDir));
+        } else {
+            logManagerExportTask = gulp.src(PATHS.BUNDLEROOT + "logManager.js").pipe(gulp.dest(targetDir));
+        }
+
         var injectLibPaths = [
             PATHS.NODE_MODULES + "oneNoteApi/target/oneNoteApi.min.js"
         ];
@@ -328,7 +364,7 @@ function exportCommonJS(targetDir) {
 
         targetDirHasExportedCommonJs[targetDir] = true;
 
-        return injectLibsTask;
+        return merge(logManagerExportTask, injectLibsTask);
     }
 }
 
@@ -417,6 +453,7 @@ function exportChromeJS() {
     ]).pipe(concat("renderer.js")).pipe(gulp.dest(targetDir));
 
     var chromeExtensionTask = gulp.src([
+        targetDir + "logManager.js",
         targetDir + "oneNoteApi.min.js",
         PATHS.BUNDLEROOT + "chromeExtension.js"
     ]).pipe(concat("chromeExtension.js")).pipe(gulp.dest(targetDir));
@@ -480,6 +517,7 @@ function exportEdgeJS() {
     ]).pipe(concat("renderer.js")).pipe(gulp.dest(targetDir));
 
     var edgeExtensionTask = gulp.src([
+        targetDir + "logManager.js",
         targetDir + "oneNoteApi.min.js",
         PATHS.BUNDLEROOT + "edgeExtension.js"
     ]).pipe(concat("edgeExtension.js")).pipe(gulp.dest(targetDir));
