@@ -185,6 +185,21 @@
 			(image as any).srcset = undefined;
 			image.removeAttribute("srcset");
 		}
+		// Strip every "on*" event-handler attribute from every element. The
+		// renderer iframe is sandboxed, but defense in depth: keep handlers
+		// out of the captured DOM so they can't run in any downstream context
+		// (Readability extracts a subtree, save HTML is sent to OneNote, etc.).
+		let all = doc.getElementsByTagName("*");
+		for (let i = 0; i < all.length; i++) {
+			let el = all[i];
+			let attrs = el.attributes;
+			for (let j = attrs.length - 1; j >= 0; j--) {
+				let name = attrs[j].name;
+				if (name.length > 2 && name.charCodeAt(0) === 111 /* o */ && name.charCodeAt(1) === 110 /* n */) {
+					el.removeAttribute(name);
+				}
+			}
+		}
 	}
 
 	function removeUnsupportedHrefs(doc: Document): void {

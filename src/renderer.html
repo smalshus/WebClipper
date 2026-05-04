@@ -37,8 +37,15 @@
 		</button>
 	</div>
 </div>
-<iframe id="content-frame" tabindex="-1"></iframe>
-<div id="preview-frame-wrap" tabindex="0" role="region" aria-label="Clip preview"><iframe id="preview-frame" tabindex="-1"></iframe></div>
+<!--
+	sandbox="allow-same-origin" blocks script execution inside the captured page
+	and the article preview while still permitting CSS rendering, image/font
+	loading, and same-origin DOM reads (needed by Readability + bookmark
+	extraction). Defense in depth on top of contentCaptureInject's tag/attr
+	scrubbing — anything that survives the capture filter still can't run here.
+-->
+<iframe id="content-frame" tabindex="-1" sandbox="allow-same-origin"></iframe>
+<div id="preview-frame-wrap" tabindex="0" role="region" aria-label="Clip preview"><iframe id="preview-frame" tabindex="-1" sandbox="allow-same-origin"></iframe></div>
 <div id="preview-container" tabindex="0" role="region" aria-label="Clip preview"></div>
 </div>
 <div id="sidebar" role="main" aria-label="OneNote Web Clipper">

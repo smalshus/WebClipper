@@ -30,6 +30,17 @@ type TabRemoveInfo = chrome.tabs.TabRemoveInfo;
 type WebResponseCacheDetails = chrome.webRequest.WebResponseCacheDetails;
 type Window = chrome.windows.Window;
 
+// Escape user-provided strings before inlining into the OneNote citation HTML
+// the worker constructs. saveUrl arrives via port message and ends up in both
+// an href attribute and visible text — quotes/brackets must be neutralized
+// either way to prevent attribute or tag escape.
+function escapeAttr(s: string): string {
+	return s.replace(/&/g, "&amp;").replace(/"/g, "&quot;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+}
+function escapeHtml(s: string): string {
+	return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+}
+
 export class WebExtensionWorker extends ExtensionWorkerBase<W3CTab, number> {
 	private injectUrls: InjectUrls;
 	private noOpTrackerInvoked: boolean;
@@ -696,7 +707,7 @@ export class WebExtensionWorker extends ExtensionWorkerBase<W3CTab, number> {
 									presentationHtml += "<div style=\"" + fontStyle + "\">&quot;" + escaped + "&quot;</div>";
 								}
 								if (saveUrl && saveMode !== "bookmark") {
-									presentationHtml += "<div style=\"" + fontStyle + "\">Clipped from: <a href=\"" + saveUrl + "\">" + saveUrl + "</a></div>";
+									presentationHtml += "<div style=\"" + fontStyle + "\">Clipped from: <a href=\"" + escapeAttr(saveUrl) + "\">" + escapeHtml(saveUrl) + "</a></div>";
 								}
 								presentationHtml += bodyOnml;
 								presentationHtml += "</body></html>";
@@ -847,7 +858,7 @@ export class WebExtensionWorker extends ExtensionWorkerBase<W3CTab, number> {
 												distHtml += "<div style=\"" + fStyle + "\">&quot;" + escaped + "&quot;</div>";
 											}
 											if (pageIdx === 0 && saveUrl) {
-												distHtml += "<div style=\"" + fStyle + "\">Clipped from: <a href=\"" + saveUrl + "\">" + saveUrl + "</a></div>";
+												distHtml += "<div style=\"" + fStyle + "\">Clipped from: <a href=\"" + escapeAttr(saveUrl) + "\">" + escapeHtml(saveUrl) + "</a></div>";
 											}
 											// Attachment <object> goes before page image (matches legacy ordering)
 											if (pageIdx === 0 && pdfAttachEnabled && saveAttachmentData) {
@@ -960,11 +971,24 @@ export class WebExtensionWorker extends ExtensionWorkerBase<W3CTab, number> {
 						regionWindowId = t.windowId;
 						WebExtension.browser.windows.update(regionWindowId, { focused: true }, () => {
 							if (WebExtension.browser.runtime.lastError) { /* ignore */ }
-							// Inject i18n strings before overlay script so it can read them
+							// Inject i18n strings before overlay script so it can read them.
+							// Define as non-writable / non-configurable so page JS can't swap
+							// in spoofed UI strings between the two executeScript calls.
 							let regionStrings = message.regionStrings || {};
 							WebExtension.browser.scripting.executeScript({
 								target: { tabId: regionTabId },
-								func: function(s: any) { (window as any).__regionStrings = s; },
+								func: function(s: any) {
+									try {
+										Object.defineProperty(window, "__regionStrings", {
+											value: Object.freeze(s),
+											writable: false,
+											configurable: false,
+											enumerable: false
+										});
+									} catch (e) {
+										// Property already locked from a prior region invocation — keep existing.
+									}
+								},
 								args: [regionStrings]
 							}, () => {
 								WebExtension.browser.scripting.executeScript({
