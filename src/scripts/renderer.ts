@@ -120,6 +120,7 @@ let stitchViewportHeight = 0;
 let stitchContentHeight = 0;
 let sidebarCssWidth = 321; // Matches Figma 242:4365 (320px content + 1px border)
 let contentPixelWidth = 0; // set on first capture, excludes sidebar
+let contentSrcX = 0; // source-x offset into captured viewport (sidebar width in RTL, 0 in LTR)
 
 let sidebarTitle = document.getElementById("sidebar-title") as HTMLSpanElement;
 let userInfoDiv = document.getElementById("user-info") as HTMLDivElement;
@@ -177,25 +178,39 @@ let articleWorkingHtml = ""; // Preserves highlights/edits across mode switches
 let saveTimeoutId: any = 0; // Client-side save timeout (service worker setTimeout unreliable)
 
 // --- Localization ---
-// Read localized strings directly from localStorage (shared extension origin, populated by extensionBase)
-// Falls back to bundled English defaults if not available
+// Read localized strings directly from localStorage (shared extension origin).
+// Both writers (extensionBase.fetchAndStoreLocStrings at boot and CachedHttp's
+// setTimeStampedValue per click) produce a TimeStampedData wrapper:
+//   { data: { key: value, ... }, lastUpdated: <ms> }
+// Falls back to bundled English defaults if not available.
 let locStrings: any = {};
 try {
 	let raw = localStorage.getItem("locStrings");
-	if (raw) { locStrings = JSON.parse(raw); }
+	if (raw) {
+		let parsed = JSON.parse(raw);
+		locStrings = (parsed && parsed.data) || {};
+	}
 } catch (e) { /* ignore */ }
 
 function loc(key: string, fallback: string): string {
 	return (locStrings && locStrings[key]) || fallback;
 }
 
-// Set HTML lang attribute from stored locale (extensionBase stores navigator.language in localStorage.locale)
+// Set HTML lang + dir from stored locale (extensionBase stores navigator.language in localStorage.locale).
+// RTL list mirrors legacy Rtl.isRtl: ISO 639-1 codes whose translations our string servers ship as RTL.
+const RTL_LANGS = ["ar", "fa", "he", "sd", "ug", "ur"];
+function isRtlLocale(locale: string): boolean {
+	if (!locale) { return false; }
+	let primary = locale.split("-")[0].split("_")[0].toLowerCase();
+	return RTL_LANGS.indexOf(primary) >= 0;
+}
 try {
 	let storedLocale = localStorage.getItem("displayLocaleOverride") || localStorage.getItem("locale");
 	if (storedLocale) {
 		document.documentElement.lang = storedLocale.replace(/_/g, "-");
+		document.documentElement.dir = isRtlLocale(storedLocale) ? "rtl" : "ltr";
 	}
-} catch (e) { /* keep default "en" */ }
+} catch (e) { /* keep default "en" / ltr */ }
 
 // Screen reader announcements via aria-live region
 function announceToScreenReader(text: string) {
@@ -554,7 +569,10 @@ function makeCollapsibleHeading(li: HTMLLIElement, depth: number) {
 	arrow.className = "collapse-arrow";
 	arrow.src = "images/arrow_down.png";
 	arrow.alt = "";
-	li.appendChild(arrow);
+	// Disclosure chevron sits at the leading edge of the heading (before icon
+	// and label), matching standard tree-control convention. Direction-aware
+	// flex layout puts it on the left in LTR and on the right in RTL.
+	li.insertBefore(arrow, li.firstChild);
 	li.setAttribute("aria-expanded", "true");
 	let toggle = () => {
 		let collapsed = li.classList.toggle("collapsed");
@@ -585,9 +603,20 @@ function makeCollapsibleHeading(li: HTMLLIElement, depth: number) {
 	});
 }
 
+// Tree indent — depth 0 sits at the row's base padding; each deeper level
+// shifts content over by one full "chevron + gap + icon + gap" stride so a
+// child's icon column lines up with its parent's label column (matches the
+// legacy onenotepicker hierarchy).
+const ROW_INDENT_BASE = 12;
+const ROW_INDENT_STEP = 36; // 10 chevron + 6 gap + 14 icon + 6 gap
+function setRowIndent(li: HTMLElement, depth: number) {
+	li.style.setProperty("padding-inline-start", (ROW_INDENT_BASE + depth * ROW_INDENT_STEP) + "px");
+}
+
 function addNotebookHeading(name: string) {
 	let li = document.createElement("li");
 	li.className = "section-heading notebook-heading";
+	setRowIndent(li, 0);
 	let img = document.createElement("img");
 	img.src = "images/notebook.png";
 	img.alt = "";
@@ -602,7 +631,7 @@ function addNotebookHeading(name: string) {
 function addGroupHeading(name: string, depth: number) {
 	let li = document.createElement("li");
 	li.className = "section-heading group-heading";
-	li.style.paddingLeft = (12 + depth * 16) + "px";
+	setRowIndent(li, depth);
 	let img = document.createElement("img");
 	img.src = "images/section_group.png";
 	img.alt = "";
@@ -620,7 +649,7 @@ function addSectionItem(id: string, displayName: string, fullPath: string, prese
 	li.setAttribute("data-id", id);
 	li.setAttribute("role", "option");
 	li.setAttribute("tabindex", "-1");
-	li.style.paddingLeft = (12 + depth * 16) + "px";
+	setRowIndent(li, depth);
 	let img = document.createElement("img");
 	img.src = "images/section.png";
 	img.alt = "";
@@ -1100,7 +1129,7 @@ function renderArticleHtml(html: string) {
 		+ "::-webkit-scrollbar{width:6px} ::-webkit-scrollbar-thumb{background:rgba(0,0,0,0.2);border-radius:3px} ::-webkit-scrollbar-track{background:transparent}"
 		+ "h2 { font-size: 18px; color: rgb(46,117,181); }"
 		+ "h3, h4, h5, h6 { color: rgb(91,155,213); margin-top: 14pt; margin-bottom: 14pt; }"
-		+ "figure { margin-left: 0; }"
+		+ "figure { margin-inline-start: 0; }"
 		+ "pre, code { background: #f5f5f5; padding: 2px 6px; border-radius: 3px; font-size: 14px; }"
 		// Wrap long lines instead of horizontal scroll — OneNote doesn't preserve
 		// scrollbars in saved pages, so showing one in preview is misleading.
@@ -1108,12 +1137,12 @@ function renderArticleHtml(html: string) {
 		// output and unbreakable tokens (long URLs, paths) in code samples.
 		+ "pre, pre code { white-space: pre-wrap !important; overflow-wrap: anywhere !important; word-break: break-word !important; overflow-x: hidden !important; }"
 		+ "pre { padding: 12px; }"
-		+ "blockquote { border-left: 3px solid rgb(46,117,181); margin-left: 0; padding-left: 16px; color: #555; }"
+		+ "blockquote { border-inline-start: 3px solid rgb(46,117,181); margin-inline-start: 0; padding-inline-start: 16px; color: #555; }"
 		+ "table { border-collapse: collapse; width: 100%; }"
 		+ "td, th { border: 1px solid #ddd; padding: 8px; }"
 		+ ".highlighted { background: #fefe56; }"
 		+ ".highlight-anchor { position: relative; display: inline-block; }"
-		+ ".delete-highlight { position: absolute; top: -8px; left: -8px; z-index: 10; "
+		+ ".delete-highlight { position: absolute; top: -8px; inset-inline-start: -8px; z-index: 10; "
 		+ "width: 18px; height: 18px; border-radius: 50%; background: #e74c3c; color: #fff; "
 		+ "font-size: 12px; line-height: 18px; text-align: center; cursor: pointer; }"
 		+ ".delete-highlight:hover { background: #c0392b; }";
@@ -2468,9 +2497,13 @@ port.onMessage.addListener((message: any) => {
 			if (message.index === 0) {
 				// First capture: initialize canvas dimensions
 				stitchDpr = imgHeight / stitchViewportHeight;
-				// Exclude sidebar pixels from the canvas — only keep content area
-				contentPixelWidth = imgWidth - Math.round(sidebarCssWidth * stitchDpr);
-				if (contentPixelWidth <= 0) { contentPixelWidth = imgWidth; }
+				// Exclude sidebar pixels from the canvas — only keep content area.
+				// In RTL the sidebar sits on the left of the viewport, so the
+				// source-x offset shifts past it; LTR reads from x=0.
+				let sidebarPx = Math.round(sidebarCssWidth * stitchDpr);
+				contentPixelWidth = imgWidth - sidebarPx;
+				if (contentPixelWidth <= 0) { contentPixelWidth = imgWidth; sidebarPx = 0; }
+				contentSrcX = document.documentElement.dir === "rtl" ? sidebarPx : 0;
 				let maxHeight = 16384;
 				if (stitchContentHeight > 0) {
 					maxHeight = Math.min(Math.round(stitchContentHeight * stitchDpr), 16384);
@@ -2483,7 +2516,7 @@ port.onMessage.addListener((message: any) => {
 
 				// Draw first capture (content area only, excluding sidebar)
 				let drawH = Math.min(imgHeight, stitchCanvas.height);
-				stitchCtx.drawImage(img, 0, 0, contentPixelWidth, drawH, 0, 0, contentPixelWidth, drawH);
+				stitchCtx.drawImage(img, contentSrcX, 0, contentPixelWidth, drawH, 0, 0, contentPixelWidth, drawH);
 				stitchYOffset = drawH;
 			} else {
 				// Calculate overlap: expected vs actual scroll position
@@ -2508,7 +2541,7 @@ port.onMessage.addListener((message: any) => {
 					srcH = remaining;
 				}
 
-				stitchCtx.drawImage(img, 0, srcY, contentPixelWidth, srcH, 0, stitchYOffset, contentPixelWidth, srcH);
+				stitchCtx.drawImage(img, contentSrcX, srcY, contentPixelWidth, srcH, 0, stitchYOffset, contentPixelWidth, srcH);
 				stitchYOffset += srcH;
 			}
 

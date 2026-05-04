@@ -205,7 +205,7 @@ iframe#preview-frame {
 	background: @colorNeutralBackground1; color: @colorNeutralForeground1;
 	display: flex; flex-direction: column;
 	box-sizing: border-box; overflow: hidden;
-	border-left: 1px solid @colorNeutralStroke2;
+	border-inline-start: 1px solid @colorNeutralStroke2;
 	// The sidebar is a control surface, not reading material. Caret browsing
 	// (F7) and some accessibility tools blink a text caret on every focused
 	// element including buttons and read-only displays, which looks wrong.
@@ -356,7 +356,8 @@ iframe#preview-frame {
 	width: 100%; box-sizing: border-box;
 	background: @colorNeutralBackground1; color: @colorNeutralForeground1;
 	border: 1px solid @colorNeutralStroke1; border-radius: 4px;
-	padding: 4px 28px 4px 12px; font-size: 14px; line-height: 20px; font-family: inherit;
+	padding: 4px 12px; padding-inline-end: 28px;
+	font-size: 14px; line-height: 20px; font-family: inherit;
 	cursor: pointer;
 	// Combobox click target — disable text selection so double-click doesn't
 	// highlight the section path text. Caret hiding handled by #sidebar above.
@@ -410,9 +411,11 @@ iframe#preview-frame {
 	img { width: 14px; height: 14px; flex-shrink: 0; }
 	&:first-child { margin-top: 0; }
 	&:hover { background: @colorSubtleBackgroundHover; }
-	// Collapse/expand arrow icon (reuses legacy onenotepicker arrows)
+	// Collapse/expand arrow icon (reuses legacy onenotepicker arrows).
+	// Positioned via DOM order — sits as the first child so it lands at the
+	// leading edge of the heading (left in LTR, right in RTL via flex flip).
 	.collapse-arrow {
-		margin-left: auto; flex-shrink: 0;
+		flex-shrink: 0;
 		width: 10px; height: 10px;
 		opacity: 0.6;
 		transition: transform 0.15s;
@@ -595,7 +598,7 @@ iframe#preview-frame {
 	overflow: hidden;
 	text-overflow: ellipsis;
 	max-width: 180px;
-	text-align: left;
+	text-align: start;
 	line-height: 16px;
 }
 
@@ -649,7 +652,7 @@ iframe#preview-frame {
 // Background: translucent black 5% per sticky note spec
 .region-remove-btn {
 	display: inline-flex; align-items: center; gap: 4px;
-	height: 28px; padding: 0 12px 0 8px;
+	height: 28px; padding: 0; padding-inline: 8px 12px;
 	margin-bottom: 8px; // gap between button and image
 	border-radius: 4px;
 	border: 1px solid rgba(0,0,0,0.08);
@@ -807,6 +810,40 @@ iframe#preview-frame {
 	border-color: @focusRingColor !important;
 }
 
+// --- RTL overrides ---
+// Most directional rules are expressed with logical properties (inline-start/end,
+// padding-inline, text-align: start) and flip automatically under dir="rtl".
+// The rules below are physical-axis-only properties that logical equivalents
+// don't cover (background-position keywords, corner-specific border-radius)
+// or directional raster assets (arrow_right.png used for the collapse arrow).
+[dir="rtl"] {
+	// Section picker chevron — anchored to the trailing edge regardless of direction
+	#section-selected { background-position: left 8px center; }
+
+	// Article header font-family / font-size button groups — keep the seam
+	// between paired buttons. With direction:rtl the visual order flips, so
+	// the rounded outer corners and flat seam corners of :first-child /
+	// :last-child must swap sides to stay on the right physical edges.
+	#article-header {
+		#font-family-group, #font-size-group {
+			button:first-child {
+				border-top-right-radius: 4px; border-bottom-right-radius: 4px;
+				border-top-left-radius: 0; border-bottom-left-radius: 0;
+				border-right: 1px solid @colorNeutralStroke1;
+				border-left: none;
+			}
+			button:last-child {
+				border-top-left-radius: 4px; border-bottom-left-radius: 4px;
+				border-top-right-radius: 0; border-bottom-right-radius: 0;
+			}
+		}
+	}
+
+	// Collapse arrow uses arrow_right.png — mirror it horizontally so the
+	// collapsed state still points toward the trailing edge.
+	.collapse-arrow { transform: scaleX(-1); }
+}
+
 // High contrast mode (Windows Contrast Themes) — forced-colors support
 @media (forced-colors: active) {
 
@@ -887,7 +924,7 @@ iframe#preview-frame {
 	.sidebar-group { border-color: ButtonText !important; background: Canvas !important; }
 	#sidebar-header { border-bottom-color: ButtonText !important; }
 	// Visible edge between preview area and sidebar
-	#sidebar { border-left: 1px solid ButtonText !important; }
+	#sidebar { border-inline-start: 1px solid ButtonText !important; }
 
 	// --- Section picker ---
 	#section-selected {
@@ -898,7 +935,7 @@ iframe#preview-frame {
 		background-image: none !important;
 		&::after {
 			content: "\25BC"; // ▼ down-pointing triangle
-			position: absolute; right: 10px; top: 50%; transform: translateY(-50%);
+			position: absolute; inset-inline-end: 10px; top: 50%; transform: translateY(-50%);
 			color: FieldText; font-size: 10px;
 		}
 		&:focus { border-color: Highlight !important; }
@@ -1094,7 +1131,7 @@ iframe#preview-frame {
 
 .pdf-attach-warning {
 	color: #a80000; font-size: 12px;
-	padding: 4px 0 0 20px;
+	padding: 4px 0 0 0; padding-inline-start: 20px;
 }
 
 // PDF preview pages in preview-container
@@ -1112,13 +1149,16 @@ iframe#preview-frame {
 		background: #fff;
 	}
 	.pdf-page-number {
-		position: absolute; left: 12px; top: 12px;
+		position: absolute; inset-inline-start: 12px; top: 12px;
 		min-width: 36px; height: 36px;
 		background: rgba(0,0,0,0.60); color: #fff;
 		font-size: 15px; font-family: "Segoe UI", sans-serif;
 		display: flex; align-items: center; justify-content: center;
 		pointer-events: none; border-radius: 4px;
 		padding: 0 8px; box-sizing: border-box;
+		// Numeric pagination ("3 / 10") — keep source order under RTL parents
+		// so the current/total digits don't get reordered to "10 / 3".
+		direction: ltr;
 	}
 	.pdf-page-img.unselected {
 		opacity: 0.3;

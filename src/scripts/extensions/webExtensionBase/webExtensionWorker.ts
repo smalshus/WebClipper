@@ -116,7 +116,14 @@ export class WebExtensionWorker extends ExtensionWorkerBase<W3CTab, number> {
 			});
 			return;
 		}
-		this.openRendererWindow();
+		// Refresh locStrings before opening so `displayLocaleOverride` (set via
+		// localStorage for testing or honored from navigator.language) takes
+		// effect end-to-end — html dir/lang AND translated strings. The fetch
+		// is short-circuited by clipperData's cache when the locale matches
+		// what's already in storage; only a locale change forces a network hit.
+		this.getLocalizedStringsForBrowser(() => {
+			this.openRendererWindow();
+		});
 	}
 
 	/**

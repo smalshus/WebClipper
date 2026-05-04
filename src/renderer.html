@@ -73,7 +73,7 @@
 					</label>
 					<label class="pdf-radio-label">
 						<input type="radio" name="pdf-pages" value="range"> <span>Page range</span>
-						<input type="text" id="pdf-range-input" class="pdf-range-input" placeholder="e.g. 1-5, 7, 9-12" readonly aria-label="Page range">
+						<input type="text" id="pdf-range-input" class="pdf-range-input" placeholder="e.g. 1-5, 7, 9-12" readonly aria-label="Page range" dir="ltr">
 					</label>
 					<div id="pdf-range-error" class="pdf-range-error" role="alert" style="display:none;"></div>
 				</div>
@@ -95,7 +95,7 @@
 			<label class="field-label" id="note-label" for="note-field">Note</label>
 			<textarea id="note-field" rows="2" placeholder="Add a note..."></textarea>
 			<label class="field-label" id="source-label">Source</label>
-			<div id="source-url" class="source-url" aria-labelledby="source-label"><svg class="source-icon" width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true"><path d="M9.49999 4H10.5C12.433 4 14 5.567 14 7.5C14 9.36856 12.5357 10.8951 10.6941 10.9948L10.5023 11L9.5023 11.0046C9.22616 11.0059 9.00127 10.783 8.99999 10.5069C8.99888 10.2614 9.17481 10.0565 9.40787 10.0131L9.4977 10.0046L10.5 10C11.8807 10 13 8.88071 13 7.5C13 6.17452 11.9685 5.08996 10.6644 5.00532L10.5 5H9.49999C9.22386 5 8.99999 4.77614 8.99999 4.5C8.99999 4.25454 9.17687 4.05039 9.41012 4.00806L9.49999 4ZM5.5 4H6.5C6.77614 4 7 4.22386 7 4.5C7 4.74546 6.82312 4.94961 6.58988 4.99194L6.5 5H5.5C4.11929 5 3 6.11929 3 7.5C3 8.82548 4.03154 9.91004 5.33562 9.99468L5.5 10H6.5C6.77614 10 7 10.2239 7 10.5C7 10.7455 6.82312 10.9496 6.58988 10.9919L6.5 11H5.5C3.567 11 2 9.433 2 7.5C2 5.63144 3.46428 4.10487 5.30796 4.00518L5.5 4ZM5.50023 7L10.5002 7.0023C10.7764 7.00242 11.0001 7.22638 11 7.50252C10.9999 7.74798 10.8229 7.95205 10.5897 7.99428L10.4998 8.0023L5.49977 8C5.22363 7.99987 4.99987 7.77591 5 7.49977C5.00011 7.25431 5.17708 7.05024 5.41035 7.00801L5.50023 7Z" fill="currentColor"/></svg><span id="source-url-text"></span></div>
+			<div id="source-url" class="source-url" aria-labelledby="source-label"><svg class="source-icon" width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true"><path d="M9.49999 4H10.5C12.433 4 14 5.567 14 7.5C14 9.36856 12.5357 10.8951 10.6941 10.9948L10.5023 11L9.5023 11.0046C9.22616 11.0059 9.00127 10.783 8.99999 10.5069C8.99888 10.2614 9.17481 10.0565 9.40787 10.0131L9.4977 10.0046L10.5 10C11.8807 10 13 8.88071 13 7.5C13 6.17452 11.9685 5.08996 10.6644 5.00532L10.5 5H9.49999C9.22386 5 8.99999 4.77614 8.99999 4.5C8.99999 4.25454 9.17687 4.05039 9.41012 4.00806L9.49999 4ZM5.5 4H6.5C6.77614 4 7 4.22386 7 4.5C7 4.74546 6.82312 4.94961 6.58988 4.99194L6.5 5H5.5C4.11929 5 3 6.11929 3 7.5C3 8.82548 4.03154 9.91004 5.33562 9.99468L5.5 10H6.5C6.77614 10 7 10.2239 7 10.5C7 10.7455 6.82312 10.9496 6.58988 10.9919L6.5 11H5.5C3.567 11 2 9.433 2 7.5C2 5.63144 3.46428 4.10487 5.30796 4.00518L5.5 4ZM5.50023 7L10.5002 7.0023C10.7764 7.00242 11.0001 7.22638 11 7.50252C10.9999 7.74798 10.8229 7.95205 10.5897 7.99428L10.4998 8.0023L5.49977 8C5.22363 7.99987 4.99987 7.77591 5 7.49977C5.00011 7.25431 5.17708 7.05024 5.41035 7.00801L5.50023 7Z" fill="currentColor"/></svg><span id="source-url-text" dir="ltr"></span></div>
 		</div>
 		<div id="section-group" class="sidebar-group">
 			<label class="field-label" id="section-label">Location</label>
@@ -136,7 +136,7 @@
 	</div>
 	<div id="user-info">
 		<div id="user-info-left">
-			<span id="user-email"></span>
+			<span id="user-email" dir="ltr"></span>
 			<a id="signout-link" href="#">Sign out</a>
 		</div>
 		<a id="feedback-link" href="#"><svg class="feedback-icon" width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true"><path d="M6.25 7.75C6.66421 7.75 7 7.41421 7 7C7 6.58579 6.66421 6.25 6.25 6.25C5.83579 6.25 5.5 6.58579 5.5 7C5.5 7.41421 5.83579 7.75 6.25 7.75ZM6.13646 9.66654C5.95229 9.46078 5.6362 9.44327 5.43043 9.62743C5.22467 9.8116 5.20716 10.1277 5.39132 10.3335C6.03148 11.0487 6.96337 11.5 8 11.5C9.03663 11.5 9.96851 11.0487 10.6087 10.3335C10.7928 10.1277 10.7753 9.8116 10.5696 9.62743C10.3638 9.44327 10.0477 9.46078 9.86353 9.66654C9.40505 10.1788 8.74037 10.5 8 10.5C7.25963 10.5 6.59494 10.1788 6.13646 9.66654ZM10.5 7C10.5 7.41421 10.1642 7.75 9.75 7.75C9.33579 7.75 9 7.41421 9 7C9 6.58579 9.33579 6.25 9.75 6.25C10.1642 6.25 10.5 6.58579 10.5 7ZM14 8C14 4.68629 11.3137 2 8 2C4.68629 2 2 4.68629 2 8C2 11.3137 4.68629 14 8 14C11.3137 14 14 11.3137 14 8ZM3 8C3 5.23858 5.23858 3 8 3C10.7614 3 13 5.23858 13 8C13 10.7614 10.7614 13 8 13C5.23858 13 3 10.7614 3 8Z" fill="currentColor"/></svg><span id="feedback-label">Feedback</span></a>
