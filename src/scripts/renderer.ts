@@ -316,8 +316,11 @@ cancelBtn.addEventListener("click", () => {
 function fireCloseClipperIfNoClip(closeReason: string) {
 	if (clipSuccessCount > 0) { return; }
 	let panelType = "ClipOptions"; // default
-	if (!isSignedIn) { panelType = "SignInNeeded"; }
-	else if (saveDone) { panelType = "ClippingSuccess"; }
+	if (!isSignedIn) {
+		panelType = "SignInNeeded";
+	} else if (saveDone) {
+		panelType = "ClippingSuccess";
+	}
 	let evt = new Event.BaseEvent(Event.Label.CloseClipper);
 	evt.setCustomProperty(PropertyName.Custom.CurrentPanel, panelType);
 	evt.setCustomProperty(PropertyName.Custom.CloseReason, closeReason);

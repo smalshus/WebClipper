@@ -60,8 +60,8 @@ export class WebExtensionWorker extends ExtensionWorkerBase<W3CTab, number> {
 			this.logger.setContextProperty(Log.Context.Custom.BrowserLanguage, locale);
 
 			// Ensure FlightInfo is set even if flighting API hasn't responded — empty string satisfies requirement.
-			let clientInfo = this.clientInfo.get();
-			if (!clientInfo.flightingInfo) {
+			let clientInfoData = this.clientInfo.get();
+			if (!clientInfoData.flightingInfo) {
 				this.logger.setContextProperty(Log.Context.Custom.FlightInfo, "");
 			}
 

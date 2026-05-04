@@ -95,8 +95,11 @@ export abstract class ExtensionBase<TWorker extends ExtensionWorkerBase<TTab, TT
 	}
 
 	public static getExtensionVersion(): string {
-		try { return chrome.runtime.getManifest().version; }
-		catch (e) { return ExtensionBase.version; }
+		try {
+			return chrome.runtime.getManifest().version;
+		} catch (e) {
+			return ExtensionBase.version;
+		}
 	}
 
 	public static shouldCheckForMajorUpdates(lastSeenVersion: Version, currentVersion: Version) {

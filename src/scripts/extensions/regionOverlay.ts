@@ -181,10 +181,10 @@
 
 	function getDirectionMessage(): string {
 		let directions: string[] = [];
-		if (keyDownDict["ArrowUp"]) { directions.push(strings.up || "Up"); }
-		if (keyDownDict["ArrowDown"]) { directions.push(strings.down || "Down"); }
-		if (keyDownDict["ArrowLeft"]) { directions.push(strings.left || "Left"); }
-		if (keyDownDict["ArrowRight"]) { directions.push(strings.right || "Right"); }
+		if (keyDownDict.ArrowUp) { directions.push(strings.up || "Up"); }
+		if (keyDownDict.ArrowDown) { directions.push(strings.down || "Down"); }
+		if (keyDownDict.ArrowLeft) { directions.push(strings.left || "Left"); }
+		if (keyDownDict.ArrowRight) { directions.push(strings.right || "Right"); }
 		return directions.join(" ");
 	}
 
@@ -192,10 +192,10 @@
 
 	function animateKeyboard() {
 		let deltaX = 0, deltaY = 0;
-		if (keyDownDict["ArrowUp"])    { deltaY -= cursorSpeed; }
-		if (keyDownDict["ArrowDown"])  { deltaY += cursorSpeed; }
-		if (keyDownDict["ArrowLeft"])  { deltaX -= cursorSpeed; }
-		if (keyDownDict["ArrowRight"]) { deltaX += cursorSpeed; }
+		if (keyDownDict.ArrowUp)    { deltaY -= cursorSpeed; }
+		if (keyDownDict.ArrowDown)  { deltaY += cursorSpeed; }
+		if (keyDownDict.ArrowLeft)  { deltaX -= cursorSpeed; }
+		if (keyDownDict.ArrowRight) { deltaX += cursorSpeed; }
 
 		if (deltaX !== 0 || deltaY !== 0) {
 			cursorX = Math.max(0, Math.min(cursorX + deltaX, window.innerWidth));
@@ -232,8 +232,8 @@
 	}
 
 	function noArrowKeysHeld(): boolean {
-		return !keyDownDict["ArrowUp"] && !keyDownDict["ArrowDown"]
-			&& !keyDownDict["ArrowLeft"] && !keyDownDict["ArrowRight"];
+		return !keyDownDict.ArrowUp && !keyDownDict.ArrowDown
+			&& !keyDownDict.ArrowLeft && !keyDownDict.ArrowRight;
 	}
 
 	// --- Mouse handlers ---
