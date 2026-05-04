@@ -8,9 +8,9 @@ import {Session} from "./logging/submodules/session";
 import {Status} from "./logging/submodules/status";
 
 // Renderer page script - connects to service worker via port
-// and handles scroll/capture commands. Content HTML read from
-// chrome.storage.session; images sent to worker via chunked port
-// messages at save time (per-port isolation enables multi-window).
+// and handles scroll/capture commands. Content HTML arrives inline
+// on the loadContent port message; images sent to worker via chunked
+// port messages at save time (per-port isolation enables multi-window).
 //
 // Content is rendered inside an iframe for CSS isolation — the renderer's
 // own styles (scrollbar hiding, overflow) don't interfere with the page's CSS.
@@ -396,12 +396,10 @@ try {
 	if (defaultSize > 0) { articleFontSize = defaultSize; }
 } catch (e) { /* keep default 16 */ }
 
-// Load page title and URL from session storage (page-specific, still needs session)
-chrome.storage.session.get(["fullPageStatusText", "fullPageTitle", "fullPageUrl"], (stored: any) => {
-	document.title = strings.clipperTitle;
-	if (stored && stored.fullPageTitle) { titleField.value = stored.fullPageTitle; originalTitle = stored.fullPageTitle; }
-	if (stored && stored.fullPageUrl) { sourceUrlText.textContent = stored.fullPageUrl; sourceUrl.title = stored.fullPageUrl; }
-});
+// Document title is set unconditionally; the page title and source URL arrive
+// in the loadContent port message and are populated there (no session-storage
+// round trip needed).
+document.title = strings.clipperTitle;
 
 // --- Section picker (custom dropdown with scrollable list) ---
 function selectSection(id: string, label: string) {
@@ -2063,11 +2061,16 @@ function updateAttachCheckbox() {
 	}
 }
 
-// Show local file permission panel in preview area (used by both worker-blocked and PDFJS-blocked paths)
+// Show local file permission panel in preview area (used by both worker-blocked and PDFJS-blocked paths).
+// Idempotent: file:/// PDFs typically trigger BOTH paths — the worker's executeScript fails (no file URL
+// permission) and the renderer's PDFJS fetch then also fails for the same reason. Without this guard the
+// panel was rendered twice.
 function showLocalPdfBlockedPanel() {
+	if (document.getElementById("pdf-blocked-panel")) { return; }
 	let loadEl = document.getElementById("pdf-initial-loading");
 	if (loadEl && loadEl.parentNode) { loadEl.parentNode.removeChild(loadEl); }
 	let panel = document.createElement("div");
+	panel.id = "pdf-blocked-panel";
 	panel.setAttribute("role", "alert");
 	panel.style.cssText = "padding:32px 24px;text-align:center;color:#444;font-family:Segoe UI,sans-serif;";
 	let title = document.createElement("div");
@@ -2186,27 +2189,30 @@ modeButtons.forEach((btn, idx) => {
 
 port.onMessage.addListener((message: any) => {
 	if (message.action === "loadContent") {
-		// Read HTML, base URL, cached stylesheets, and page metadata from session storage
-		chrome.storage.session.get(["fullPageHtmlContent", "fullPageBaseUrl", "fullPageTitle", "fullPageUrl", "fullPageContentType"], (stored: any) => {
-			let rawHtml = stored && stored.fullPageHtmlContent ? stored.fullPageHtmlContent : "";
-			let baseUrl = stored && stored.fullPageBaseUrl ? stored.fullPageBaseUrl : "";
+		// Page payload arrives inline on the loadContent port message — html,
+		// baseUrl, title, url, contentType, plus the localFileNotAllowed flag.
+		let rawHtml: string = message.html || "";
+		let baseUrl: string = message.baseUrl || "";
+		let pageTitle: string = message.title || "";
+		let pageUrl: string = message.url || "";
+		let contentType: string = message.contentType || "html";
 
-			// Populate title and source URL (may not have been available on initial page load)
-			if (stored && stored.fullPageTitle && !titleField.value) { titleField.value = stored.fullPageTitle; }
-			if (stored && stored.fullPageUrl && !sourceUrlText.textContent) { sourceUrlText.textContent = stored.fullPageUrl; sourceUrl.title = stored.fullPageUrl; }
-			if (stored && stored.fullPageTitle) { originalTitle = stored.fullPageTitle; }
+		// Populate title and source URL (may not have been available on initial page load)
+		if (pageTitle && !titleField.value) { titleField.value = pageTitle; }
+		if (pageUrl && !sourceUrlText.textContent) { sourceUrlText.textContent = pageUrl; sourceUrl.title = pageUrl; }
+		if (pageTitle) { originalTitle = pageTitle; }
 
+		{
 			// Local file not allowed — show helpful permission message in preview area
-			// Flag comes via port message (not session storage) to avoid cross-session leaks
 			if (message.localFileNotAllowed) {
-				enterPdfMode(stored.fullPageUrl || "");
+				enterPdfMode(pageUrl);
 				showLocalPdfBlockedPanel();
 				return;
 			}
 
 			// PDF content type — enter PDF mode instead of normal capture flow
-			if (stored && stored.fullPageContentType === "pdf") {
-				enterPdfMode(stored.fullPageUrl || "");
+			if (contentType === "pdf") {
+				enterPdfMode(pageUrl);
 				return;
 			}
 
@@ -2454,7 +2460,7 @@ port.onMessage.addListener((message: any) => {
 			} else {
 				renderContent();
 			}
-		});
+		}
 	}
 
 	if (message.action === "scroll") {
@@ -3156,6 +3162,26 @@ let captureHeight = window.outerHeight;
 let resizing = false;
 let minWidth = 1000;  // sidebar(322) + 678px content area
 let minHeight = 600;
+
+// chrome.windows.create sets the OUTER width, but our content sizing math
+// (sidebar 321 + content N) targets the INNER viewport. On Windows popup
+// windows the OS chrome (border, scrollbar reservation) eats ~16 CSS px
+// from the inner viewport, which the user observed as captured content
+// being 1008px instead of the requested 1024px. Compensate once at boot
+// by enlarging the outer width by the measured chrome delta so the inner
+// viewport ends up matching what the worker originally requested.
+(function compensateForOsWindowChrome() {
+	let chromeDelta = window.outerWidth - window.innerWidth;
+	if (chromeDelta <= 0) { return; }
+	try {
+		chrome.windows.getCurrent({}, function(w: any) {
+			if (!w || !w.id || !w.width) { return; }
+			let newOuter = w.width + chromeDelta;
+			captureWidth = newOuter; // update lock target before the resize so the resize handler doesn't fight us
+			chrome.windows.update(w.id, { width: newOuter });
+		});
+	} catch (e) { /* best-effort — capture still works at the slightly-narrower size */ }
+})();
 
 function unlockResize() {
 	resizeLocked = false;

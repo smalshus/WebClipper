@@ -317,13 +317,31 @@ export class WebExtensionWorker extends ExtensionWorkerBase<W3CTab, number> {
 		let pendingPort: chrome.runtime.Port;
 		let windowReady = false;
 		let contentCaptured = false;
+		// Holds the captured page payload (html/title/url/contentType/etc.) until
+		// the renderer's port is ready; then it's flushed into a single loadContent
+		// port message. Replaces the earlier chrome.storage.session round-trip —
+		// lives in worker memory for the lifetime of this open-renderer flow.
+		let pendingContent: any;
+		// Build the loadContent payload by copying pendingContent's keys (TS lib
+		// here is too old for Object.assign / spread, so manual merge it is).
+		let buildLoadContent = () => {
+			let m: any = { action: "loadContent" };
+			if (pendingContent) {
+				for (let k in pendingContent) {
+					if (pendingContent.hasOwnProperty(k)) { m[k] = pendingContent[k]; }
+				}
+			}
+			return m;
+		};
 		let activePort: chrome.runtime.Port;
 
 		// Per-session USID for API call correlation and feedback URL.
 		// Matches old logger pattern: "cccccccc-" prefix + v4 UUID tail.
 		let sessionUsid = "cccccccc-" + WebExtensionWorker.newGuid().substring(9);
 
-		// Listener for contentCaptureInject.ts messages — stores page data in session storage
+		// Listener for contentCaptureInject.ts messages — buffers page data in
+		// pendingContent so the eventual loadContent port message can carry the
+		// full payload in one shot.
 		let captureListener = (rawMsg: any, sender: any) => {
 			if (!sender.tab || sender.tab.id !== this.tab.id) { return; }
 			let msg: any;
@@ -331,20 +349,18 @@ export class WebExtensionWorker extends ExtensionWorkerBase<W3CTab, number> {
 			if (msg.action !== "contentCaptureComplete") { return; }
 			chrome.runtime.onMessage.removeListener(captureListener);
 
-			let storageData: any = {
-				fullPageHtmlContent: msg.html || "",
-				fullPageBaseUrl: msg.baseUrl || "",
-				fullPageTitle: msg.title || "",
-				fullPageUrl: msg.url || "",
-				fullPageStatusText: "Capturing page...",
-				fullPageContentType: msg.contentType || "html"
+			pendingContent = {
+				html: msg.html || "",
+				baseUrl: msg.baseUrl || "",
+				title: msg.title || "",
+				url: msg.url || "",
+				statusText: "Capturing page...",
+				contentType: msg.contentType || "html"
 			};
-			chrome.storage.session.set(storageData, () => {
-				contentCaptured = true;
-				if (activePort) {
-					activePort.postMessage({ action: "loadContent" });
-				}
-			});
+			contentCaptured = true;
+			if (activePort) {
+				activePort.postMessage(buildLoadContent());
+			}
 		};
 
 		// If signed in, inject content capture script immediately (runs in parallel with window opening)
@@ -354,16 +370,18 @@ export class WebExtensionWorker extends ExtensionWorkerBase<W3CTab, number> {
 			let sendLocalFileNotAllowed = () => {
 				let tabUrl = this.tab.url || "";
 				let isPdf = /\.pdf$/i.test(tabUrl);
-				chrome.storage.session.set({
-					fullPageContentType: isPdf ? "pdf" : "html",
-					fullPageTitle: this.tab.title || "",
-					fullPageUrl: tabUrl
-				}, () => {
-					contentCaptured = true;
-					if (activePort) {
-						activePort.postMessage({ action: "loadContent", localFileNotAllowed: true });
-					}
-				});
+				pendingContent = {
+					html: "",
+					baseUrl: "",
+					title: this.tab.title || "",
+					url: tabUrl,
+					contentType: isPdf ? "pdf" : "html",
+					localFileNotAllowed: true
+				};
+				contentCaptured = true;
+				if (activePort) {
+					activePort.postMessage(buildLoadContent());
+				}
 			};
 			if (isLocalFile) {
 				// Try injecting — catch both sync throws and async promise rejections
@@ -453,13 +471,9 @@ export class WebExtensionWorker extends ExtensionWorkerBase<W3CTab, number> {
 				WebExtension.browser.windows.remove(renderWindowId, () => {
 					if (WebExtension.browser.runtime.lastError) { /* window may already be closed */ }
 				});
-				// Clean up all session storage from this capture session
-				chrome.storage.session.get(null, (all: any) => { // tslint:disable-line:no-null-keyword
-					let keys = Object.keys(all || {}).filter(function(k) {
-						return k.indexOf("fullPage") === 0;
-					});
-					if (keys.length > 0) { chrome.storage.session.remove(keys); }
-				});
+				// Drop the in-memory captured payload so the worker doesn't hold
+				// onto multi-megabyte HTML after the renderer is gone.
+				pendingContent = undefined;
 				try { chrome.runtime.onMessage.removeListener(captureListener); } catch (e) { /* ignore */ }
 				try { WebExtension.browser.tabs.onUpdated.removeListener(navListener); } catch (e) { /* ignore */ }
 			};
@@ -486,23 +500,21 @@ export class WebExtensionWorker extends ExtensionWorkerBase<W3CTab, number> {
 			port.onMessage.addListener((message: any) => {
 				if (message.action === "ready") {
 					// Set zoom to 100% before loading content
+					let flushLoadContent = () => {
+						if (contentCaptured && pendingContent) {
+							port.postMessage(buildLoadContent());
+						}
+					};
 					try {
 						WebExtension.browser.tabs.query({ windowId: renderWindowId }, (tabs: chrome.tabs.Tab[]) => {
 							if (tabs && tabs.length > 0 && tabs[0].id) {
-								WebExtension.browser.tabs.setZoom(tabs[0].id, 1, () => {
-									// Only send loadContent if content capture already completed
-									if (contentCaptured) {
-										port.postMessage({ action: "loadContent" });
-									}
-								});
-							} else if (contentCaptured) {
-								port.postMessage({ action: "loadContent" });
+								WebExtension.browser.tabs.setZoom(tabs[0].id, 1, flushLoadContent);
+							} else {
+								flushLoadContent();
 							}
 						});
 					} catch (e) {
-						if (contentCaptured) {
-							port.postMessage({ action: "loadContent" });
-						}
+						flushLoadContent();
 					}
 				}
 
