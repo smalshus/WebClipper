@@ -110,9 +110,8 @@ The `onenoteapi` library's `TypedFormData.asBlob()` already handles mixed string
 ### Data Flow Diagram (Legacy — Pre-V3)
 
 > **Note:** This diagram shows the original flow via clipper.tsx. As of V3 (self-contained sign-in),
-> clipper.tsx is no longer injected. See `docs/unified-window-plan.md` for the current V3 flow diagram
-> where the worker opens the renderer directly and `contentCaptureInject.ts` replaces the
-> clipper.tsx → fullPageScreenshotHelper.ts chain.
+> clipper.tsx is no longer injected. The worker opens the renderer directly and
+> `contentCaptureInject.ts` replaces the clipper.tsx → fullPageScreenshotHelper.ts chain.
 
 ```
 [Legacy flow — kept for reference]
@@ -241,8 +240,6 @@ V3 eliminates this dependency entirely:
 - Save with token refresh, telemetry, region capture, article/bookmark/PDF modes — all in the renderer
 - Old sidebar (clipperInject.ts → clipper.tsx → Mithril) is dead code
 
-See `docs/unified-window-plan.md` for the complete V3 architecture, flow diagram, and verification checklist.
-
 ---
 
 ## Beyond V3: Mode Parity, Fluent 2 Redesign, Reliability
@@ -275,8 +272,6 @@ After the V3 self-contained architecture stabilized, additional work brought the
 
 ### Telemetry parity
 Full event parity with legacy clipper. Context properties (`AuthType`, `UserInfoId`, `ContentType`) set at sign-in and mode switch; `PromiseEvents` (`ClipToOneNoteAction`, `HandleSignInEvent`, `GetNotebooks`) with accurate Duration; `CloseClipper` only on abandonment (`clipCount===0`); `InvokeClipper` deferred to avoid logger init race; ClipMode uses legacy enum names (`Augmentation`, not `Article`); region/PDF events with proper metadata.
-
-See `docs/telemetry-parity-plan.md` for the full event inventory.
 
 ---
 
