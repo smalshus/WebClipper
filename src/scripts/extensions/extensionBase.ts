@@ -95,7 +95,11 @@ export abstract class ExtensionBase<TWorker extends ExtensionWorkerBase<TTab, TT
 	}
 
 	public static getExtensionVersion(): string {
-		return ExtensionBase.version;
+		try {
+			return chrome.runtime.getManifest().version;
+		} catch (e) {
+			return ExtensionBase.version;
+		}
 	}
 
 	public static shouldCheckForMajorUpdates(lastSeenVersion: Version, currentVersion: Version) {
@@ -137,7 +141,11 @@ export abstract class ExtensionBase<TWorker extends ExtensionWorkerBase<TTab, TT
 				let locStringsDict = JSON.parse(responsePackage.parsedResponse);
 				if (locStringsDict) {
 					this.clipperData.setValue(ClipperStorageKeys.locale, locale);
-					this.clipperData.setValue(ClipperStorageKeys.locStrings, responsePackage.parsedResponse);
+					// Match the TimeStampedData shape used by CachedHttp.getFreshValue so a
+					// later per-click locStrings refresh can compare lastUpdated and skip the
+					// network if this boot fetch is still within the 12h TTL.
+					let timeStampedValue = JSON.stringify({ data: locStringsDict, lastUpdated: Date.now() });
+					this.clipperData.setValue(ClipperStorageKeys.locStrings, timeStampedValue);
 					Localization.setLocalizedStrings(locStringsDict);
 				}
 				return Promise.resolve(locStringsDict);

@@ -1,40 +1,28 @@
 import {ClientInfo} from "../clientInfo";
 import {PageInfo} from "../pageInfo";
-import {PdfPreviewInfo, PreviewGlobalInfo, PreviewInfo} from "../previewInfo";
-import {StringUtils} from "../stringUtils";
 import {UserInfo} from "../userInfo";
 
 import {SmartValue} from "../communicator/smartValue";
 
-import {AugmentationResult} from "../contentCapture/augmentationHelper";
-import {FullPageScreenshotResult} from "../contentCapture/fullPageScreenshotHelper";
-import {PdfScreenshotResult} from "../contentCapture/pdfScreenshotHelper";
-import {BookmarkResult} from "../contentCapture/bookmarkHelper";
-
-import {ClipperInjectOptions} from "../extensions/clipperInject";
 import {InvokeOptions} from "../extensions/invokeOptions";
 
 import {ClipMode} from "./clipMode";
 import {Status} from "./status";
-import {ClipSaveStatus} from "./clipSaveStatus";
 
+// Minimal ClipperState type retained for clipperUrls.ts feedback URL
+// generation. The full V1 ClipperState (with augmentation/full-page/PDF/
+// bookmark result fields, ClipperInjectOptions, etc.) was removed alongside
+// the V1 sidebar — the V3 renderer carries its own state in renderer.ts.
 export interface DataResult<T> {
 	data?: T;
 	status: Status;
 }
 
-export interface ClipperStateProp {
-	clipperState: ClipperState;
-}
-
 export interface ClipperState {
-	injectOptions?: ClipperInjectOptions;
 	uiExpanded?: boolean;
-
 	fetchLocStringStatus?: Status;
 
-	// Initialized at the start of the Clipper's instantiation to determine initial mode. Additionally,
-	// is re-fetched whenever the Clipper visbility is toggled on
+	// Initialized at the start of the Clipper's instantiation
 	invokeOptions?: InvokeOptions;
 
 	// External "static" data
@@ -43,36 +31,11 @@ export interface ClipperState {
 	clientInfo?: ClientInfo;
 
 	// User input
-	currentMode?: SmartValue<ClipMode>; // Full, Region, Augmentation
-	saveLocation?: string; // Result from the SectionPicker
-
-	// Content preview data + retrieval status
-	fullPageResult?: DataResult<FullPageScreenshotResult>;
-	pdfResult?: DataResult<SmartValue<PdfScreenshotResult>>;
-	regionResult?: DataResult<string[]>;
-	augmentationResult?: DataResult<AugmentationResult>;
-	bookmarkResult?: DataResult<BookmarkResult>;
-
-	// Editable preview content
-	previewGlobalInfo?: PreviewGlobalInfo;
-	augmentationPreviewInfo?: PreviewInfo;
-	bookmarkPreviewInfo?: PreviewInfo;
-	pdfPreviewInfo?: PdfPreviewInfo;
-	selectionPreviewInfo?: PreviewInfo;
-
-	// Save to OneNote status
-	oneNoteApiResult?: DataResult<OneNoteApi.Page | OneNoteApi.RequestError>;
-	clipSaveStatus?: ClipSaveStatus;
+	currentMode?: SmartValue<ClipMode>;
+	saveLocation?: string;
 
 	// Should be set when the Web Clipper enters a state that can not be recovered this session
 	badState?: boolean;
-
-	// Used for determining if user should see ratings prompt
-	numSuccessfulClips?: number;
-	showRatingsPrompt?: boolean;
-
-	// Element ID to focus after next render
-	focusOnRender?: string;
 
 	setState?: (partialState: ClipperState) => void;
 	reset?: () => void;

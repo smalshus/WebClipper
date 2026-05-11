@@ -1,0 +1,156 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title></title>
+<link rel="stylesheet" href="renderer.css">
+</head>
+<body>
+<div id="signin-overlay" style="display:none;" role="dialog" aria-modal="true" aria-label="Sign in">
+	<div id="signin-panel">
+		<img src="images/onenote_logo_clipper.png" alt="OneNote" class="signin-logo">
+		<h2 class="signin-title">OneNote Web Clipper</h2>
+		<p class="signin-description" id="signin-description">Sign in to clip this page to OneNote</p>
+		<button id="signin-msa-btn" class="signin-btn">Sign in with Microsoft account</button>
+		<button id="signin-orgid-btn" class="signin-btn signin-btn-secondary">Sign in with work or school account</button>
+		<div id="signin-error" class="signin-error" role="alert" style="display:none;"></div>
+		<div id="signin-progress" class="signin-progress" style="display:none;">Signing in...</div>
+	</div>
+</div>
+<div id="preview-area">
+<div id="article-header" style="display:none;" role="toolbar" aria-label="Article options">
+	<button id="highlight-btn" aria-pressed="false" title="Toggle highlighter">
+		<img src="images/editoroptions/highlight_tool_off.svg" alt="">
+	</button>
+	<div class="header-separator"></div>
+	<div id="font-family-group">
+		<button id="sans-serif-btn" class="font-btn active" aria-pressed="true">Sans-serif</button>
+		<button id="serif-btn" class="font-btn" aria-pressed="false">Serif</button>
+	</div>
+	<div class="header-separator"></div>
+	<div id="font-size-group">
+		<button id="font-decrease-btn" title="Decrease font size">
+			<img src="images/editoroptions/font_down.svg" alt="">
+		</button>
+		<button id="font-increase-btn" title="Increase font size">
+			<img src="images/editoroptions/font_up.svg" alt="">
+		</button>
+	</div>
+</div>
+<!--
+	sandbox="allow-same-origin" blocks script execution inside the captured page
+	and the article preview while still permitting CSS rendering, image/font
+	loading, and same-origin DOM reads (needed by Readability + bookmark
+	extraction). Defense in depth on top of contentCaptureInject's tag/attr
+	scrubbing — anything that survives the capture filter still can't run here.
+-->
+<iframe id="content-frame" tabindex="-1" sandbox="allow-same-origin"></iframe>
+<div id="preview-frame-wrap" tabindex="0" role="region" aria-label="Clip preview"><iframe id="preview-frame" tabindex="-1" sandbox="allow-same-origin"></iframe></div>
+<div id="preview-container" tabindex="0" role="region" aria-label="Clip preview"></div>
+</div>
+<div id="sidebar" role="main" aria-label="OneNote Web Clipper">
+	<div id="sidebar-header">
+		<img src="images/onenote_logo_clipper.png" alt="">
+		<span class="title" id="sidebar-title">OneNote Web Clipper</span>
+	</div>
+	<div id="sidebar-body">
+		<div id="mode-group" class="sidebar-group">
+			<label class="field-label" id="mode-label">What do you want to capture?</label>
+			<div id="mode-panel" role="toolbar" aria-label="Clipping mode">
+				<button class="mode-btn selected" data-mode="fullpage" aria-pressed="true">
+					<svg class="mode-icon" width="20" height="20" viewBox="0 0 20 20" fill="none" aria-hidden="true"><path d="M5.5 6C4.67157 6 4 6.67157 4 7.5V8.5C4 8.77614 4.22386 9 4.5 9C4.77614 9 5 8.77614 5 8.5V7.5C5 7.22386 5.22386 7 5.5 7H6.5C6.77614 7 7 6.77614 7 6.5C7 6.22386 6.77614 6 6.5 6H5.5ZM13.5 6C13.2239 6 13 6.22386 13 6.5C13 6.77614 13.2239 7 13.5 7H14.5C14.7761 7 15 7.22386 15 7.5V8.5C15 8.77614 15.2239 9 15.5 9C15.7761 9 16 8.77614 16 8.5V7.5C16 6.67157 15.3284 6 14.5 6H13.5ZM5 11.5C5 11.2239 4.77614 11 4.5 11C4.22386 11 4 11.2239 4 11.5V12.5C4 13.3284 4.67157 14 5.5 14H6.5C6.77614 14 7 13.7761 7 13.5C7 13.2239 6.77614 13 6.5 13H5.5C5.22386 13 5 12.7761 5 12.5V11.5ZM16 11.5C16 11.2239 15.7761 11 15.5 11C15.2239 11 15 11.2239 15 11.5V12.5C15 12.7761 14.7761 13 14.5 13H13.5C13.2239 13 13 13.2239 13 13.5C13 13.7761 13.2239 14 13.5 14H14.5C15.3284 14 16 13.3284 16 12.5V11.5ZM2 6C2 4.89543 2.89543 4 4 4H16C17.1046 4 18 4.89543 18 6V14C18 15.1046 17.1046 16 16 16H4C2.89543 16 2 15.1046 2 14V6ZM3 6V14C3 14.5523 3.44772 15 4 15H16C16.5523 15 17 14.5523 17 14V6C17 5.44772 16.5523 5 16 5H4C3.44772 5 3 5.44772 3 6Z" fill="currentColor"/></svg><span>Full Page</span>
+				</button>
+				<button class="mode-btn" data-mode="region" aria-pressed="false">
+					<svg class="mode-icon" width="20" height="20" viewBox="0 0 20 20" fill="none" aria-hidden="true"><path d="M3 5.5C3 4.11929 4.11929 3 5.5 3H14.5C15.8807 3 17 4.11929 17 5.5V9.59971C16.6832 9.43777 16.3486 9.30564 16 9.20703V5.5C16 4.67157 15.3284 4 14.5 4H5.5C4.67157 4 4 4.67157 4 5.5V14.5C4 15.3284 4.67157 16 5.5 16H9.20703C9.30564 16.3486 9.43777 16.6832 9.59971 17H5.5C4.11929 17 3 15.8807 3 14.5V5.5ZM19 14.5C19 16.9853 16.9853 19 14.5 19C12.0147 19 10 16.9853 10 14.5C10 12.0147 12.0147 10 14.5 10C16.9853 10 19 12.0147 19 14.5ZM15 12.5C15 12.2239 14.7761 12 14.5 12C14.2239 12 14 12.2239 14 12.5V14H12.5C12.2239 14 12 14.2239 12 14.5C12 14.7761 12.2239 15 12.5 15H14V16.5C14 16.7761 14.2239 17 14.5 17C14.7761 17 15 16.7761 15 16.5V15H16.5C16.7761 15 17 14.7761 17 14.5C17 14.2239 16.7761 14 16.5 14H15V12.5Z" fill="currentColor"/></svg><span>Region</span>
+				</button>
+				<button class="mode-btn" data-mode="bookmark" aria-pressed="false">
+					<svg class="mode-icon" width="20" height="20" viewBox="0 0 20 20" fill="none" aria-hidden="true"><path d="M4 4.5C4 3.11929 5.11929 2 6.5 2H13.5C14.8807 2 16 3.11929 16 4.5V17.5C16 17.6881 15.8945 17.8602 15.7269 17.9456C15.5593 18.0309 15.358 18.015 15.2059 17.9044L10 14.1182L4.79409 17.9044C4.64199 18.015 4.4407 18.0309 4.27311 17.9456C4.10553 17.8602 4 17.6881 4 17.5V4.5ZM6.5 3C5.67157 3 5 3.67157 5 4.5V16.5181L9.70592 13.0956C9.88124 12.9681 10.1188 12.9681 10.2941 13.0956L15 16.5181V4.5C15 3.67157 14.3284 3 13.5 3H6.5Z" fill="currentColor"/></svg><span>Bookmark</span>
+				</button>
+				<button class="mode-btn" data-mode="article" aria-pressed="false">
+					<svg class="mode-icon" width="20" height="20" viewBox="0 0 20 20" fill="none" aria-hidden="true"><path d="M5.5 5C5.22386 5 5 5.22386 5 5.5C5 5.77614 5.22386 6 5.5 6H14.5C14.7761 6 15 5.77614 15 5.5C15 5.22386 14.7761 5 14.5 5H5.5ZM6.5 11C7.32843 11 8 10.3284 8 9.5C8 8.67157 7.32843 8 6.5 8C5.67157 8 5 8.67157 5 9.5C5 10.3284 5.67157 11 6.5 11ZM6.5 10C6.22386 10 6 9.77614 6 9.5C6 9.22386 6.22386 9 6.5 9C6.77614 9 7 9.22386 7 9.5C7 9.77614 6.77614 10 6.5 10ZM8 13.5C8 14.3284 7.32843 15 6.5 15C5.67157 15 5 14.3284 5 13.5C5 12.6716 5.67157 12 6.5 12C7.32843 12 8 12.6716 8 13.5ZM7 13.5C7 13.2239 6.77614 13 6.5 13C6.22386 13 6 13.2239 6 13.5C6 13.7761 6.22386 14 6.5 14C6.77614 14 7 13.7761 7 13.5ZM9 9.5C9 9.22386 9.22386 9 9.5 9H14.5C14.7761 9 15 9.22386 15 9.5C15 9.77614 14.7761 10 14.5 10H9.5C9.22386 10 9 9.77614 9 9.5ZM9.5 13C9.22386 13 9 13.2239 9 13.5C9 13.7761 9.22386 14 9.5 14H14.5C14.7761 14 15 13.7761 15 13.5C15 13.2239 14.7761 13 14.5 13H9.5ZM6 3C4.34315 3 3 4.34315 3 6V14C3 15.6569 4.34315 17 6 17H14C15.6569 17 17 15.6569 17 14V6C17 4.34315 15.6569 3 14 3H6ZM4 6C4 4.89543 4.89543 4 6 4H14C15.1046 4 16 4.89543 16 6V14C16 15.1046 15.1046 16 14 16H6C4.89543 16 4 15.1046 4 14V6Z" fill="currentColor"/></svg><span>Article</span>
+				</button>
+				<button class="mode-btn" data-mode="pdf" aria-pressed="false" style="display:none;">
+					<img class="mode-icon-img" src="images/pdf.png" alt=""><span>PDF</span>
+				</button>
+			</div>
+			<div id="pdf-options" style="display:none;" role="group" aria-label="PDF options">
+				<div id="pdf-page-selection" role="radiogroup" aria-label="Page selection">
+					<label class="pdf-radio-label">
+						<input type="radio" name="pdf-pages" value="all" checked> <span>All pages</span>
+					</label>
+					<label class="pdf-radio-label">
+						<input type="radio" name="pdf-pages" value="range"> <span>Page range</span>
+						<input type="text" id="pdf-range-input" class="pdf-range-input" placeholder="e.g. 1-5, 7, 9-12" readonly aria-label="Page range" dir="ltr">
+					</label>
+					<div id="pdf-range-error" class="pdf-range-error" role="alert" style="display:none;"></div>
+				</div>
+				<div id="pdf-checkboxes">
+					<label class="pdf-checkbox-label" id="pdf-attach-label">
+						<input type="checkbox" id="pdf-attach-checkbox" checked> <span>Attach PDF file</span>
+						<span class="pdf-checkbox-subtext">(all pages)</span>
+					</label>
+					<div id="pdf-attach-warning" class="pdf-attach-warning" style="display:none;" role="status">PDF too large to attach</div>
+					<label class="pdf-checkbox-label">
+						<input type="checkbox" id="pdf-distribute-checkbox"> <span>New note for each PDF page</span>
+					</label>
+				</div>
+			</div>
+		</div>
+		<div id="meta-group" class="sidebar-group">
+			<label class="field-label" id="title-label" for="title-field">Title</label>
+			<textarea id="title-field" rows="2" placeholder="Add a page title..."></textarea>
+			<label class="field-label" id="note-label" for="note-field">Note</label>
+			<textarea id="note-field" rows="2" placeholder="Add a note..."></textarea>
+			<label class="field-label" id="source-label">Source</label>
+			<div id="source-url" class="source-url" aria-labelledby="source-label"><svg class="source-icon" width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true"><path d="M9.49999 4H10.5C12.433 4 14 5.567 14 7.5C14 9.36856 12.5357 10.8951 10.6941 10.9948L10.5023 11L9.5023 11.0046C9.22616 11.0059 9.00127 10.783 8.99999 10.5069C8.99888 10.2614 9.17481 10.0565 9.40787 10.0131L9.4977 10.0046L10.5 10C11.8807 10 13 8.88071 13 7.5C13 6.17452 11.9685 5.08996 10.6644 5.00532L10.5 5H9.49999C9.22386 5 8.99999 4.77614 8.99999 4.5C8.99999 4.25454 9.17687 4.05039 9.41012 4.00806L9.49999 4ZM5.5 4H6.5C6.77614 4 7 4.22386 7 4.5C7 4.74546 6.82312 4.94961 6.58988 4.99194L6.5 5H5.5C4.11929 5 3 6.11929 3 7.5C3 8.82548 4.03154 9.91004 5.33562 9.99468L5.5 10H6.5C6.77614 10 7 10.2239 7 10.5C7 10.7455 6.82312 10.9496 6.58988 10.9919L6.5 11H5.5C3.567 11 2 9.433 2 7.5C2 5.63144 3.46428 4.10487 5.30796 4.00518L5.5 4ZM5.50023 7L10.5002 7.0023C10.7764 7.00242 11.0001 7.22638 11 7.50252C10.9999 7.74798 10.8229 7.95205 10.5897 7.99428L10.4998 8.0023L5.49977 8C5.22363 7.99987 4.99987 7.77591 5 7.49977C5.00011 7.25431 5.17708 7.05024 5.41035 7.00801L5.50023 7Z" fill="currentColor"/></svg><span id="source-url-text" dir="ltr"></span></div>
+		</div>
+		<div id="section-group" class="sidebar-group">
+			<label class="field-label" id="section-label">Location</label>
+			<div id="section-picker">
+				<div id="section-selected" tabindex="0" role="combobox" aria-haspopup="listbox" aria-expanded="false" aria-labelledby="section-label"></div>
+				<div id="section-list-container" role="listbox">
+					<ul id="section-list" role="presentation"></ul>
+				</div>
+			</div>
+		</div>
+		<div id="button-row">
+			<button id="save-btn">Clip</button>
+			<button id="cancel-btn">Cancel</button>
+		</div>
+		<div id="success-banner" style="display:none;" role="status">
+			<div class="status-row">
+				<span class="status-icon status-icon-success" aria-hidden="true"></span>
+				<span id="success-text" class="status-title"></span>
+			</div>
+			<p id="success-description" class="status-description"></p>
+			<button id="view-onenote-link"></button>
+		</div>
+		<div id="error-banner" style="display:none;" role="alert">
+			<div class="status-row">
+				<span class="status-icon status-icon-error" aria-hidden="true"></span>
+				<span id="error-title" class="status-title"></span>
+			</div>
+			<p id="error-description" class="status-description"></p>
+			<button id="copy-diagnostics" type="button" style="display:none;" aria-label="Copy diagnostic information">
+				<span class="copy-icon" aria-hidden="true">&#x1F4CB;</span><span id="copy-diagnostics-label">Copy diagnostic info</span>
+			</button>
+		</div>
+		<div id="capture-panel">
+			<div id="status-text"></div>
+			<div id="progress-info"></div>
+			<div id="progress-bar-track"><div id="progress-bar-fill" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0"></div></div>
+		</div>
+	</div>
+	<div id="user-info">
+		<div id="user-info-left">
+			<span id="user-email" dir="ltr"></span>
+			<a id="signout-link" href="#">Sign out</a>
+		</div>
+		<a id="feedback-link" href="#"><svg class="feedback-icon" width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true"><path d="M6.25 7.75C6.66421 7.75 7 7.41421 7 7C7 6.58579 6.66421 6.25 6.25 6.25C5.83579 6.25 5.5 6.58579 5.5 7C5.5 7.41421 5.83579 7.75 6.25 7.75ZM6.13646 9.66654C5.95229 9.46078 5.6362 9.44327 5.43043 9.62743C5.22467 9.8116 5.20716 10.1277 5.39132 10.3335C6.03148 11.0487 6.96337 11.5 8 11.5C9.03663 11.5 9.96851 11.0487 10.6087 10.3335C10.7928 10.1277 10.7753 9.8116 10.5696 9.62743C10.3638 9.44327 10.0477 9.46078 9.86353 9.66654C9.40505 10.1788 8.74037 10.5 8 10.5C7.25963 10.5 6.59494 10.1788 6.13646 9.66654ZM10.5 7C10.5 7.41421 10.1642 7.75 9.75 7.75C9.33579 7.75 9 7.41421 9 7C9 6.58579 9.33579 6.25 9.75 6.25C10.1642 6.25 10.5 6.58579 10.5 7ZM14 8C14 4.68629 11.3137 2 8 2C4.68629 2 2 4.68629 2 8C2 11.3137 4.68629 14 8 14C11.3137 14 14 11.3137 14 8ZM3 8C3 5.23858 5.23858 3 8 3C10.7614 3 13 5.23858 13 8C13 10.7614 10.7614 13 8 13C5.23858 13 3 10.7614 3 8Z" fill="currentColor"/></svg><span id="feedback-label">Feedback</span></a>
+	</div>
+</div>
+<div id="aria-status" class="sr-only" aria-live="polite" aria-atomic="true"></div>
+<script src="pdf.combined.js"></script>
+<script src="renderer.js"></script>
+</body>
+</html>
