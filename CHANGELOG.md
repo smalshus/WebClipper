@@ -1,5 +1,8 @@
 # Change Log
 
+## 3.11.0 (May 2026)
+* Improvement : Unified renderer window with improved performance and reliability for Full Page and Article modes.
+
 ## 3.10.13 (April 2026)
 * Improvement : Added a11y improvements.
 
